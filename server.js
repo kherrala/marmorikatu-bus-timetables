@@ -31,6 +31,15 @@ const ALERT_BAR      = process.env.ALERT_BAR      !== 'false';
 const ALERT_BG_PULSE = process.env.ALERT_BG_PULSE !== 'false';
 const ALERT_OVERLAY  = process.env.ALERT_OVERLAY  !== 'false';
 
+// Map tiles: if MML_API_KEY is set, proxy MML taustakartta tiles; otherwise use CartoDB dark
+const MML_API_KEY = process.env.MML_API_KEY || '';
+const MAP_TILE_URL = MML_API_KEY
+  ? '/api/tiles/{z}/{y}/{x}'
+  : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png';
+const MAP_TILE_ATTRIBUTION = MML_API_KEY
+  ? '&copy; <a href="https://www.maanmittauslaitos.fi">Maanmittauslaitos</a>'
+  : '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+
 // STOP_IDS: explicit comma-separated list of stop IDs (city-direction).
 // Kaipanen city-direction: 4431, Pitkäniitynkatu city-direction: 4087
 const STOP_IDS_ENV = process.env.STOP_IDS || '';
@@ -171,8 +180,16 @@ async function fetchStopCoords(stopId) {
     const body = Array.isArray(data.body) ? data.body[0] : data.body;
     if (body && body.location) {
       const loc = body.location;
-      const lat = parseFloat(loc.latitude ?? loc.lat ?? loc.y);
-      const lon = parseFloat(loc.longitude ?? loc.lon ?? loc.x);
+      let lat, lon;
+      if (typeof loc === 'string') {
+        // Format: "lat,lon" e.g. "60.17066,24.94244"
+        const parts = loc.split(',');
+        lat = parseFloat(parts[0]);
+        lon = parseFloat(parts[1]);
+      } else {
+        lat = parseFloat(loc.latitude ?? loc.lat ?? loc.y);
+        lon = parseFloat(loc.longitude ?? loc.lon ?? loc.x);
+      }
       if (!isNaN(lat) && !isNaN(lon) && lat !== 0) {
         stopCoords[stopId] = { lat, lon };
         console.log(`Stop ${stopId} coords: ${lat}, ${lon}`);
@@ -274,10 +291,7 @@ async function buildScheduleCache() {
 // --- Fetch departures from vehicle-activity onward calls for stops without real-time data ---
 async function fetchFromVehicleActivity(stopIds) {
   if (stopIds.length === 0) return [];
-  const res = await fetch(`${API_BASE}/vehicle-activity`, { timeout: 15000 });
-  if (!res.ok) return [];
-  const data = await res.json();
-  const vehicles = data.body || [];
+  const vehicles = await getVehicleData();
 
   const entries = [];
   for (const v of vehicles) {
@@ -448,8 +462,66 @@ async function fetchDepartures() {
 // Startup timestamp used as version token — changes on every container restart/redeploy
 const SERVER_START_TIME = Date.now();
 
+// --- Server-side vehicle-activity cache (shared across all clients) ---
+// Upstream is fetched at most once per VEHICLE_CACHE_TTL_MS regardless of client poll rate.
+const VEHICLE_CACHE_TTL_MS = 12 * 1000; // 12 s — slightly under the 15 s client interval
+let vehicleCache = null;    // { data: {...}, fetchedAt: number }
+let vehicleFetchPromise = null; // in-flight fetch de-duplication
+
+async function getVehicleData() {
+  const now = Date.now();
+  if (vehicleCache && now - vehicleCache.fetchedAt < VEHICLE_CACHE_TTL_MS) {
+    return vehicleCache.data;
+  }
+  // De-duplicate concurrent requests
+  if (!vehicleFetchPromise) {
+    vehicleFetchPromise = (async () => {
+      try {
+        console.log('[api] vehicle-activity upstream fetch');
+        const vaRes = await fetch(`${API_BASE}/vehicle-activity`, { timeout: 10000 });
+        if (!vaRes.ok) throw new Error(`HTTP ${vaRes.status}`);
+        const vaData = await vaRes.json();
+        vehicleCache = { data: vaData.body || [], fetchedAt: Date.now() };
+      } finally {
+        vehicleFetchPromise = null;
+      }
+    })();
+  }
+  await vehicleFetchPromise;
+  return vehicleCache ? vehicleCache.data : [];
+}
+
+// --- Request logger ---
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const ms = Date.now() - start;
+    console.log(`[${new Date().toISOString().slice(11,19)}] ${req.method} ${req.path} → ${res.statusCode} (${ms}ms)`);
+  });
+  next();
+});
+
 // --- Routes ---
 app.use(express.static(path.join(__dirname, 'public')));
+
+// MML tile proxy — keeps API key server-side
+if (MML_API_KEY) {
+  app.get('/api/tiles/:z/:y/:x', async (req, res) => {
+    const { z, y, x } = req.params;
+    const url = `https://avoin-karttakuva.maanmittauslaitos.fi/avoin/wmts/1.0.0/taustakartta/default/WGS84_Pseudo-Mercator/${z}/${y}/${x}.png?api-key=${MML_API_KEY}`;
+    try {
+      const tileRes = await fetch(url, { timeout: 10000 });
+      if (!tileRes.ok) { res.status(tileRes.status).end(); return; }
+      const buf = await tileRes.buffer();
+      res.set('Content-Type', 'image/png');
+      res.set('Cache-Control', 'public, max-age=86400');
+      res.send(buf);
+    } catch (err) {
+      console.warn('Tile proxy error:', err.message);
+      res.status(502).end();
+    }
+  });
+}
 
 app.get('/api/config', (req, res) => {
   // Build per-stop walking minutes map for the frontend
@@ -467,6 +539,9 @@ app.get('/api/config', (req, res) => {
     alertBar: ALERT_BAR,
     alertBgPulse: ALERT_BG_PULSE,
     alertOverlay: ALERT_OVERLAY,
+    mapTileUrl: MAP_TILE_URL,
+    mapTileAttribution: MAP_TILE_ATTRIBUTION,
+    mapTileSubdomains: MML_API_KEY ? '' : 'abcd',
   });
 });
 
@@ -476,10 +551,7 @@ app.get('/api/version', (req, res) => {
 
 app.get('/api/vehicles', async (req, res) => {
   try {
-    const vaRes = await fetch(`${API_BASE}/vehicle-activity`, { timeout: 10000 });
-    if (!vaRes.ok) throw new Error(`HTTP ${vaRes.status}`);
-    const vaData = await vaRes.json();
-    const vehicles = vaData.body || [];
+    const vehicles = await getVehicleData();
 
     const buses = [];
     for (const v of vehicles) {

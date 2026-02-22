@@ -568,11 +568,12 @@
     }
     #urgencyOverlay:not([style*="none"]) { display: flex; }
 
-    /* animated border ring */
+    /* animated border ring — above map, below text */
     #urgencyOverlay::before {
       content: '';
       position: absolute;
       inset: 0;
+      z-index: 2;
       border: 8px solid var(--status-orange);
       animation: ring-blink-urgent 0.9s ease-in-out infinite;
       pointer-events: none;
@@ -591,6 +592,8 @@
     }
 
     #overlayInner {
+      position: relative;
+      z-index: 1;
       text-align: center;
       width: 100%;
     }
@@ -628,6 +631,7 @@
       color: var(--status-orange);
       margin-bottom: 20px;
       letter-spacing: -2px;
+      text-shadow: 0 2px 16px rgba(0,0,0,0.9);
     }
     #urgencyOverlay.state-late #overlayCountdown { color: var(--status-red); }
     #overlayDetails {
@@ -643,26 +647,33 @@
       color: rgba(255,255,255,0.25);
     }
     #urgencyOverlay { cursor: pointer; }
-    /* ── Mini-map ── */
-    .card-with-map {
-      border-radius: 12px;
-      overflow: hidden;
-      margin-bottom: 24px;
-    }
-    .card-with-map .next-bus-card {
-      border-radius: 0;
-      margin-bottom: 0;
-    }
-    #mapContainer {
+    /* ── Column maps (one per departure column) ── */
+    .col-map-container {
       max-height: 0;
       overflow: hidden;
-      transition: max-height 0.7s cubic-bezier(0.4, 0, 0.2, 1);
-      background: var(--nysse-mid);
+      transition: max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+      margin-top: 14px;
+      border-radius: 8px;
     }
-    #miniMap {
-      height: 170px;
+    .col-map-container > div {
+      height: 130px;
       width: 100%;
     }
+
+    /* ── Overlay background map ── */
+    #overlayMapWrap {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      pointer-events: none;
+      opacity: 0.45; /* dim so text stays readable */
+    }
+    #overlayMap {
+      width: 100%;
+      height: 100%;
+    }
+
     .bus-marker {
       background: var(--nysse-blue);
       color: #fff;
@@ -716,14 +727,51 @@
 <main>
   <div class="error-banner" id="errorBanner"></div>
 
-  <!-- Next bus card + mini-map -->
-  <div class="card-with-map">
-    <div class="next-bus-card empty" id="nextBusCard">
-      <div class="next-label">Next departure</div>
-      <div style="margin-top:12px;font-size:1rem;">Ladataan…</div>
+  <!-- Next bus card with per-column maps -->
+  <div class="next-bus-card empty" id="nextBusCard">
+    <!-- Empty / loading state -->
+    <div id="cardEmpty">
+      <div class="next-label">Seuraava lähtö</div>
+      <div style="margin-top:12px;font-size:1rem;color:var(--text-muted)" id="cardEmptyMsg">Ladataan…</div>
     </div>
-    <div id="mapContainer">
-      <div id="miniMap"></div>
+    <!-- Two-column layout (shown when departures available) -->
+    <div class="next-columns" id="cardColumns" style="display:none">
+      <div class="next-col primary" id="nextCol1">
+        <div class="next-label">Seuraava</div>
+        <div class="next-route" id="nextRoute1"></div>
+        <div class="next-departs" id="nextDeparts1"></div>
+        <div class="next-counters">
+          <div class="counter-block">
+            <div class="counter-label">Bussi lähtee</div>
+            <div class="counter-value" id="nextBusIn"></div>
+          </div>
+          <div class="counter-block">
+            <div class="counter-label">Lähde kotoa</div>
+            <div class="counter-value" id="nextLeaveIn"></div>
+          </div>
+        </div>
+        <div class="col-map-container" id="colMap1Container">
+          <div id="colMap1"></div>
+        </div>
+      </div>
+      <div class="next-col secondary" id="nextCol2" style="display:none">
+        <div class="next-label">Sen jälkeen</div>
+        <div class="next-route" id="nextRoute2"></div>
+        <div class="next-departs" id="nextDeparts2"></div>
+        <div class="next-counters">
+          <div class="counter-block">
+            <div class="counter-label">Bussi lähtee</div>
+            <div class="counter-value sm" id="nextBusIn2"></div>
+          </div>
+          <div class="counter-block">
+            <div class="counter-label">Lähde kotoa</div>
+            <div class="counter-value sm" id="nextLeaveIn2"></div>
+          </div>
+        </div>
+        <div class="col-map-container" id="colMap2Container">
+          <div id="colMap2"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -806,6 +854,7 @@
 
 <!-- Full-screen urgency takeover overlay (tap anywhere to snooze) -->
 <div id="urgencyOverlay" style="display:none" onclick="dismissOverlayAlert()">
+  <div id="overlayMapWrap"><div id="overlayMap"></div></div>
   <div id="overlayInner">
     <div id="overlayRoute"></div>
     <div id="overlayTitle">LÄHDE KOTOA</div>
@@ -961,56 +1010,55 @@
       .replace(/"/g, '&quot;');
   }
 
-  // ── Render a single bus column (primary or secondary) ──
-  function colHtml(dep, now, isPrimary) {
-    const colClass = isPrimary ? 'primary' : 'secondary';
-    const labelText = isPrimary ? 'Seuraava' : 'Sen jälkeen';
-    const idSuffix = isPrimary ? '' : '2';
-    const status = getStatus(dep, now);
-    const busIn = formatCountdown(dep.departureTimeMs - now);
-    const leaveIn = formatCountdown(dep.leaveByMs - now);
-    const departs = formatTime(dep.departureTimeMs);
-    const leaveBy = formatTime(dep.leaveByMs);
-    const valClass = `counter-value${isPrimary ? '' : ' sm'}`;
-    const leaveClass = `${valClass}${status !== 'at-stop' ? ' status-' + status : ''}`;
-    return `
-      <div class="next-col ${colClass}">
-        <div class="next-label">${labelText}</div>
-        <div class="next-route">
-          <span class="next-line-badge">${escHtml(dep.lineRef)}</span>
-          <span>${escHtml(dep.stopName || dep.stopId)} → ${escHtml(dep.destinationName)}</span>
-        </div>
-        <div class="next-departs">Lähtee ${departs} &nbsp;·&nbsp; Lähde kotoa ${leaveBy}</div>
-        <div class="next-counters">
-          <div class="counter-block">
-            <div class="counter-label">Bussi lähtee</div>
-            <div class="${valClass}" id="nextBusIn${idSuffix}">${busIn}</div>
-          </div>
-          <div class="counter-block">
-            <div class="counter-label">Lähde kotoa</div>
-            <div class="${leaveClass}" id="nextLeaveIn${idSuffix}">${leaveIn}</div>
-          </div>
-        </div>
-      </div>`;
-  }
-
-  // ── Render next-bus card (dep1 = primary, dep2 = secondary, may be null) ──
+  // ── Render next-bus card using DOM manipulation (preserves map containers) ──
   function renderNextBusCard(dep1, dep2, now) {
     const card = document.getElementById('nextBusCard');
+
     if (!dep1) {
       card.className = 'next-bus-card empty';
-      card.innerHTML = `
-        <div class="next-label">Seuraava lähtö</div>
-        <div style="margin-top:12px;font-size:1rem;color:var(--text-muted)">Ei busseja seuraavaan ${config.lookaheadMinutes || 60} minuuttiin</div>`;
+      document.getElementById('cardEmpty').style.display = '';
+      document.getElementById('cardColumns').style.display = 'none';
+      document.getElementById('cardEmptyMsg').textContent =
+        `Ei busseja seuraavaan ${config.lookaheadMinutes || 90} minuuttiin`;
+      dep1LineRef = null; dep1StopId = null;
+      dep2LineRef = null; dep2StopId = null;
       return;
     }
 
     const status = getStatus(dep1, now);
     card.className = `next-bus-card status-${status}`;
-    card.innerHTML = `<div class="next-columns">
-      ${colHtml(dep1, now, true)}
-      ${dep2 ? colHtml(dep2, now, false) : ''}
-    </div>`;
+    document.getElementById('cardEmpty').style.display = 'none';
+    document.getElementById('cardColumns').style.display = '';
+
+    dep1LineRef = dep1.lineRef; dep1StopId = dep1.stopId;
+
+    // Primary column
+    document.getElementById('nextRoute1').innerHTML =
+      `<span class="next-line-badge">${escHtml(dep1.lineRef)}</span>` +
+      `<span>${escHtml(dep1.stopName || dep1.stopId)} → ${escHtml(dep1.destinationName)}</span>`;
+    document.getElementById('nextDeparts1').innerHTML =
+      `Lähtee ${formatTime(dep1.departureTimeMs)} &nbsp;·&nbsp; Lähde kotoa ${formatTime(dep1.leaveByMs)}`;
+    document.getElementById('nextBusIn').textContent  = formatCountdown(dep1.departureTimeMs - now);
+    document.getElementById('nextLeaveIn').textContent = formatCountdown(dep1.leaveByMs - now);
+    document.getElementById('nextLeaveIn').className =
+      `counter-value${status !== 'at-stop' ? ' status-' + status : ''}`;
+
+    // Secondary column
+    const col2 = document.getElementById('nextCol2');
+    if (dep2) {
+      dep2LineRef = dep2.lineRef; dep2StopId = dep2.stopId;
+      col2.style.display = '';
+      document.getElementById('nextRoute2').innerHTML =
+        `<span class="next-line-badge">${escHtml(dep2.lineRef)}</span>` +
+        `<span>${escHtml(dep2.stopName || dep2.stopId)} → ${escHtml(dep2.destinationName)}</span>`;
+      document.getElementById('nextDeparts2').innerHTML =
+        `Lähtee ${formatTime(dep2.departureTimeMs)} &nbsp;·&nbsp; Lähde kotoa ${formatTime(dep2.leaveByMs)}`;
+      document.getElementById('nextBusIn2').textContent   = formatCountdown(dep2.departureTimeMs - now);
+      document.getElementById('nextLeaveIn2').textContent = formatCountdown(dep2.leaveByMs - now);
+    } else {
+      dep2LineRef = null; dep2StopId = null;
+      col2.style.display = 'none';
+    }
   }
 
   // ── Find first departure that can still be caught (with 5-min running grace) ──
@@ -1105,6 +1153,7 @@
   const overlay     = document.getElementById('urgencyOverlay');
   const showOverlay = alertOverlay && dep1 && leaveInMs1 < 2 * 60 * 1000 && !isSnoozed;
   if (showOverlay) {
+    const wasHidden = overlay.style.display === 'none' || !overlay.style.display;
     overlay.style.display = 'flex';
     overlay.className = 'state-' + status1;
     document.getElementById('overlayRoute').innerHTML =
@@ -1112,9 +1161,12 @@
     document.getElementById('overlayCountdown').textContent = formatCountdown(dep1.leaveByMs - now);
     document.getElementById('overlayDetails').innerHTML =
       `Bussi lähtee klo ${formatTime(dep1.departureTimeMs)}<br>${escHtml(dep1.stopName || dep1.stopId || '')}`;
+    // Initialise overlay map on first show
+    if (wasHidden) ensureOverlayMap();
   } else {
     overlay.style.display = 'none';
     overlay.className = '';
+    overlayMapReady = false; // reset so map re-inits if overlay re-opens
   }
 
   // ── Table rows ──
@@ -1163,31 +1215,19 @@
     }
   }
 
-  // ── Mini-map ──
-  let map = null;
-  let mapOpen = false;
-  let homeMarker = null;
-  const stopMarkerMap = {};   // { stopId: L.marker }
-  const busMarkerMap  = {};   // { lineRef: L.marker }
-
-  function ensureMapInit() {
-    if (map) return;
-    map = L.map('miniMap', {
-      zoomControl: false,
-      attributionControl: true,
-      dragging: false,
-      touchZoom: false,
-      scrollWheelZoom: false,
-      doubleClickZoom: false,
-      boxZoom: false,
-      keyboard: false,
-    });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" style="color:#aaa">OSM</a> &copy; <a href="https://carto.com/attributions" style="color:#aaa">CARTO</a>',
-      subdomains: 'abcd',
-      maxZoom: 18,
-    }).addTo(map);
-  }
+  // ── Maps ──
+  let colMap1 = null;        // Leaflet map in primary column
+  let colMap2 = null;        // Leaflet map in secondary column
+  let overlayMap = null;     // Leaflet map in urgency overlay
+  const markers1 = {};       // { home, 'stop_ID', bus } for colMap1
+  const markers2 = {};       // { home, 'stop_ID', bus } for colMap2
+  const overlayMarkers = {}; // markers for overlay map
+  let dep1LineRef = null;    // lineRef shown in primary column
+  let dep2LineRef = null;    // lineRef shown in secondary column
+  let dep1StopId  = null;
+  let dep2StopId  = null;
+  let lastVehicleData = null;
+  let overlayMapReady = false;
 
   function makeIcon(className, size) {
     return L.divIcon({ html: `<div class="${className}"></div>`, className: '', iconSize: [size, size], iconAnchor: [size/2, size/2] });
@@ -1202,62 +1242,130 @@
     });
   }
 
+  function tileLayer(m) {
+    const url = config.mapTileUrl || 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png';
+    const opts = {
+      maxZoom: 18,
+      attribution: config.mapTileAttribution || '',
+    };
+    if (config.mapTileSubdomains) opts.subdomains = config.mapTileSubdomains;
+    return L.tileLayer(url, opts).addTo(m);
+  }
+
+  function createColMap(elementId) {
+    const m = L.map(elementId, {
+      zoomControl: false, attributionControl: false,
+      dragging: false, touchZoom: false, scrollWheelZoom: false,
+      doubleClickZoom: false, boxZoom: false, keyboard: false,
+    });
+    tileLayer(m);
+    return m;
+  }
+
+  function syncMarkers(m, store, data, bus) {
+    if (data.home && !store.home) {
+      store.home = L.marker([data.home.lat, data.home.lon], { icon: makeIcon('home-marker', 14) }).addTo(m);
+    }
+    for (const stop of (data.stops || [])) {
+      const k = 'stop_' + stop.id;
+      if (!store[k]) {
+        store[k] = L.marker([stop.lat, stop.lon], { icon: makeIcon('stop-marker', 12) })
+          .bindTooltip(stop.name, { permanent: false, direction: 'top' })
+          .addTo(m);
+      }
+    }
+    if (bus) {
+      if (store.bus) { store.bus.setLatLng([bus.lat, bus.lon]); store.bus.setIcon(makeBusIcon(bus.lineRef)); }
+      else           { store.bus = L.marker([bus.lat, bus.lon], { icon: makeBusIcon(bus.lineRef) }).addTo(m); }
+    } else if (store.bus) {
+      store.bus.remove(); delete store.bus;
+    }
+  }
+
+  function fitMap(m, data, bus, stopId) {
+    const pts = [];
+    if (bus) pts.push([bus.lat, bus.lon]);
+    const stop = (data.stops || []).find(s => s.id === stopId);
+    if (stop)                pts.push([stop.lat, stop.lon]);
+    else for (const s of (data.stops || [])) pts.push([s.lat, s.lon]);
+    if (pts.length === 0 && data.home) pts.push([data.home.lat, data.home.lon]);
+    if (pts.length === 1) m.setView(pts[0], bus ? 15 : 14);
+    else if (pts.length > 1) m.fitBounds(pts, { padding: [24, 24] });
+  }
+
+  async function openColMap(colNum, data, bus, stopId) {
+    const containerEl = document.getElementById(`colMap${colNum}Container`);
+    const mapId = `colMap${colNum}`;
+    const store = colNum === 1 ? markers1 : markers2;
+    const isOpen = containerEl.style.maxHeight && containerEl.style.maxHeight !== '0px';
+
+    if (!isOpen) {
+      containerEl.style.maxHeight = '130px';
+      // Wait for CSS transition before initialising Leaflet (avoids blank tiles)
+      await new Promise(r => setTimeout(r, 650));
+      if (colNum === 1 && !colMap1) colMap1 = createColMap(mapId);
+      if (colNum === 2 && !colMap2) colMap2 = createColMap(mapId);
+    }
+    const m = colNum === 1 ? colMap1 : colMap2;
+    if (!m) return;
+    m.invalidateSize();
+    syncMarkers(m, store, data, bus);
+    fitMap(m, data, bus, stopId);
+  }
+
+  function syncOverlayMap(data, dep) {
+    if (!overlayMap) return;
+    const bus = dep ? (data.buses || []).find(b => b.lineRef === dep.lineRef) : null;
+    syncMarkers(overlayMap, overlayMarkers, data, bus);
+    // Fit to home + stop + bus
+    const pts = [];
+    if (data.home) pts.push([data.home.lat, data.home.lon]);
+    const stop = (data.stops || []).find(s => s.id === (dep && dep.stopId));
+    if (stop) pts.push([stop.lat, stop.lon]);
+    else for (const s of (data.stops || [])) pts.push([s.lat, s.lon]);
+    if (bus) pts.push([bus.lat, bus.lon]);
+    if (pts.length === 1) overlayMap.setView(pts[0], 15);
+    else if (pts.length > 1) overlayMap.fitBounds(pts, { padding: [60, 60] });
+  }
+
+  function ensureOverlayMap() {
+    if (overlayMapReady) return;
+    overlayMapReady = true;
+    // Give the overlay a frame to render before initialising Leaflet
+    requestAnimationFrame(() => {
+      overlayMap = L.map('overlayMap', {
+        zoomControl: false, attributionControl: false,
+        dragging: false, touchZoom: false, scrollWheelZoom: false,
+        doubleClickZoom: false, boxZoom: false, keyboard: false,
+      });
+      tileLayer(overlayMap);
+      overlayMap.invalidateSize();
+      if (lastVehicleData && currentPrimaryDep) syncOverlayMap(lastVehicleData, currentPrimaryDep);
+    });
+  }
+
   async function refreshVehicles() {
     try {
       const res = await fetch('/api/vehicles');
       const data = await res.json();
+      lastVehicleData = data;
 
-      const hasData = data.home || data.stops.length > 0 || data.buses.length > 0;
+      const hasData = data.home || (data.stops && data.stops.length > 0) || (data.buses && data.buses.length > 0);
       if (!hasData) return;
 
-      ensureMapInit();
+      const dep1 = (cardDepIndex >= 0 && cardDepIndex < departures.length) ? departures[cardDepIndex] : null;
+      const dep2 = (cardDepIndex >= 0 && cardDepIndex + 1 < departures.length) ? departures[cardDepIndex + 1] : null;
 
-      // Home marker
-      if (data.home && !homeMarker) {
-        homeMarker = L.marker([data.home.lat, data.home.lon], { icon: makeIcon('home-marker', 14) }).addTo(map);
-      }
+      const bus1 = dep1 ? (data.buses || []).find(b => b.lineRef === dep1.lineRef) || null : null;
+      const bus2 = dep2 ? (data.buses || []).find(b => b.lineRef === dep2.lineRef) || null : null;
 
-      // Stop markers
-      for (const stop of (data.stops || [])) {
-        if (!stopMarkerMap[stop.id]) {
-          stopMarkerMap[stop.id] = L.marker([stop.lat, stop.lon], { icon: makeIcon('stop-marker', 12) })
-            .bindTooltip(stop.name, { permanent: false, direction: 'top', className: 'leaflet-tooltip' })
-            .addTo(map);
-        }
-      }
+      if (dep1) openColMap(1, data, bus1, dep1.stopId);
+      if (dep2) openColMap(2, data, bus2, dep2.stopId);
 
-      // Bus markers — update existing, add new, remove gone
-      const seenLines = new Set();
-      for (const bus of (data.buses || [])) {
-        seenLines.add(bus.lineRef);
-        if (busMarkerMap[bus.lineRef]) {
-          busMarkerMap[bus.lineRef].setLatLng([bus.lat, bus.lon]);
-        } else {
-          busMarkerMap[bus.lineRef] = L.marker([bus.lat, bus.lon], { icon: makeBusIcon(bus.lineRef) }).addTo(map);
-        }
-      }
-      for (const key of Object.keys(busMarkerMap)) {
-        if (!seenLines.has(key)) {
-          busMarkerMap[key].remove();
-          delete busMarkerMap[key];
-        }
-      }
-
-      // Fit map to all known points
-      const pts = [];
-      if (data.home) pts.push([data.home.lat, data.home.lon]);
-      for (const s of (data.stops || [])) pts.push([s.lat, s.lon]);
-      for (const b of (data.buses || [])) pts.push([b.lat, b.lon]);
-      if (pts.length > 0) {
-        if (pts.length === 1) map.setView(pts[0], 15);
-        else map.fitBounds(pts, { padding: [24, 24] });
-      }
-
-      // Slide map open on first data
-      if (!mapOpen) {
-        mapOpen = true;
-        document.getElementById('mapContainer').style.maxHeight = '170px';
-        setTimeout(() => { if (map) map.invalidateSize(); }, 750);
+      // Keep overlay map in sync if visible
+      const overlayEl = document.getElementById('urgencyOverlay');
+      if (overlayEl.style.display !== 'none' && overlayMap) {
+        syncOverlayMap(data, dep1);
       }
     } catch (err) {
       console.warn('Vehicle refresh failed:', err.message);
