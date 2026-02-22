@@ -1124,38 +1124,35 @@
 
   // ── Init ──
   async function init() {
-    try {
-      const res = await fetch('/api/config');
-      config = await res.json();
-
-      document.getElementById('headerAddress').textContent = config.homeAddress || 'Marmorikatu 10';
-      // Build stop info: "Kaipanen · 10 min · Pitkäniitynkatu · 13 min"
-      if (config.stopLabels && config.stopWalkingMinutes) {
-        const parts = (config.stopIds || []).map(id =>
-          `${config.stopLabels[id] || id} · ${config.stopWalkingMinutes[id] || config.walkingTimeMinutes} min kävelyä`
-        );
-        document.getElementById('stopInfo').textContent = parts.join('  |  ');
-      }
-      document.getElementById('lookaheadInfo').textContent = `Seuraavat ${config.lookaheadMinutes || 60} min`;
-      document.title = `${config.homeAddress || 'Marmorikatu 10'} — Bussit`;
-
-      // Load alert settings (localStorage overrides server defaults)
-      loadAlertSettings(config);
-    } catch (err) {
-      console.warn('Could not load config:', err);
-    }
-
-    // Initial fetch
-    await refreshDepartures();
-
-    // Intervals
+    // Start clock and all intervals immediately — don't block on network
+    updateClock();
     setInterval(updateClock, 1000);
     setInterval(renderCountdowns, 1000);
     setInterval(refreshDepartures, 30000);
     setInterval(checkVersion, 60000);
 
-    // Start clock immediately
-    updateClock();
+    // Fetch config and first departures in parallel
+    await Promise.all([
+      (async () => {
+        try {
+          const res = await fetch('/api/config');
+          config = await res.json();
+          document.getElementById('headerAddress').textContent = config.homeAddress || 'Marmorikatu 10';
+          if (config.stopLabels && config.stopWalkingMinutes) {
+            const parts = (config.stopIds || []).map(id =>
+              `${config.stopLabels[id] || id} · ${config.stopWalkingMinutes[id] || config.walkingTimeMinutes} min kävelyä`
+            );
+            document.getElementById('stopInfo').textContent = parts.join('  |  ');
+          }
+          document.getElementById('lookaheadInfo').textContent = `Seuraavat ${config.lookaheadMinutes || 90} min`;
+          document.title = `${config.homeAddress || 'Marmorikatu 10'} — Bussit`;
+          loadAlertSettings(config);
+        } catch (err) {
+          console.warn('Could not load config:', err);
+        }
+      })(),
+      refreshDepartures(),
+    ]);
   }
 
   init();
