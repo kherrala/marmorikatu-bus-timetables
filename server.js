@@ -360,9 +360,17 @@ async function fetchDepartures() {
     }
   }
 
-  // 4. Merge and sort
+  // 4. Merge and sort by leaveByMs (when user must leave home), then stop preference
+  //    Stop preference follows STOP_IDS order — first listed stop is most preferred.
+  const stopPref = {};
+  monitoredStopIds.forEach((id, i) => { stopPref[id] = i; });
+
   const all = [...realtimeDepartures, ...scheduledDepartures];
-  all.sort((a, b) => a.departureTimeMs - b.departureTimeMs);
+  all.sort((a, b) => {
+    const byLeave = a.leaveByMs - b.leaveByMs;
+    if (byLeave !== 0) return byLeave;
+    return (stopPref[a.stopId] ?? 99) - (stopPref[b.stopId] ?? 99);
+  });
 
   // 5. Deduplicate: same line within 5-minute window (same bus passing multiple monitored stops)
   //    Keep the entry with the latest leaveByMs — i.e. the stop that gives the most time at home.

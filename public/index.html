@@ -381,6 +381,16 @@
       padding: 32px;
     }
 
+    .stop-tag {
+      display: inline-block;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      background: rgba(255,255,255,0.08);
+      border-radius: 4px;
+      padding: 1px 6px;
+      margin-top: 3px;
+    }
+
     /* ── Footer ── */
     footer {
       max-width: 860px;
@@ -875,7 +885,10 @@
       return `
         <tr id="row-${i}" class="">
           <td><span class="line-badge">${escHtml(dep.lineRef)}</span></td>
-          <td><span class="dest-name">${escHtml(dep.destinationName)}</span>${delayHtml}${atStopHtml}${schedHtml}</td>
+          <td>
+            <span class="dest-name">${escHtml(dep.destinationName)}</span>${delayHtml}${atStopHtml}${schedHtml}
+            <div><span class="stop-tag">${escHtml(dep.stopName || dep.stopId)}</span></div>
+          </td>
           <td class="right time-cell">${formatTime(dep.departureTimeMs)}</td>
           <td class="right time-cell">${formatTime(dep.leaveByMs)}</td>
           <td class="right countdown-cell" id="cd-${i}">--:--</td>
@@ -910,7 +923,10 @@
           <span class="next-line-badge">${escHtml(dep.lineRef)}</span>
           <span>→ ${escHtml(dep.destinationName)}</span>
         </div>
-        <div class="next-departs">Lähtee ${departs} &nbsp;·&nbsp; Lähde kotoa ${leaveBy}</div>
+        <div class="next-departs">
+          <span class="stop-tag">${escHtml(dep.stopName || dep.stopId)}</span>
+          &nbsp;Lähtee ${departs} &nbsp;·&nbsp; Lähde kotoa ${leaveBy}
+        </div>
         <div class="next-counters">
           <div class="counter-block">
             <div class="counter-label">Bussi lähtee</div>
