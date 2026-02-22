@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const fetch = require('node-fetch');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 
@@ -578,7 +579,10 @@ app.use((req, res, next) => {
 });
 
 // --- Routes ---
-app.use(express.static(path.join(__dirname, 'public')));
+const staticDir = fs.existsSync(path.join(__dirname, 'dist'))
+  ? path.join(__dirname, 'dist')
+  : path.join(__dirname, 'public');
+app.use(express.static(staticDir));
 
 app.get('/api/config', (req, res) => {
   const proto = req.headers['x-forwarded-proto'] || req.protocol;
