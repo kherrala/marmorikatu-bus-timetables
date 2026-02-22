@@ -1450,8 +1450,13 @@
       const hasData = data.home || (data.stops && data.stops.length > 0) || (data.buses && data.buses.length > 0);
       if (!hasData) return;
 
-      const dep1 = (cardDepIndex >= 0 && cardDepIndex < departures.length) ? departures[cardDepIndex] : null;
-      const dep2 = (cardDepIndex >= 0 && cardDepIndex + 1 < departures.length) ? departures[cardDepIndex + 1] : null;
+      // When cardDepIndex is temporarily -1 (during a departure refresh) but
+      // departures are already loaded, fall back to index 0 so the minimaps
+      // don't flicker closed for the brief moment before renderCountdowns
+      // restores the correct index.
+      const effectiveIdx = cardDepIndex >= 0 ? cardDepIndex : (departures.length > 0 ? 0 : -1);
+      const dep1 = effectiveIdx >= 0 ? departures[effectiveIdx] : null;
+      const dep2 = (effectiveIdx >= 0 && effectiveIdx + 1 < departures.length) ? departures[effectiveIdx + 1] : null;
 
       // Match bus to departure by lineRef. The server already filters vehicles to
       // those with our monitored stop in onwardCalls, so any bus of the right line
@@ -1535,6 +1540,10 @@
       })(),
       refreshDepartures(),
     ]);
+    // Prime cardDepIndex before the first vehicle fetch so minimaps open immediately
+    // (refreshDepartures left cardDepIndex=-1; renderCountdowns normally fixes it
+    // after 1 s, but refreshVehicles fires right now).
+    renderCountdowns();
     refreshVehicles();
   }
 

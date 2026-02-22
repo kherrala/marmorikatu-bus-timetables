@@ -671,7 +671,24 @@ app.get('/api/vehicles', async (req, res) => {
       const mvj = v.monitoredVehicleJourney || {};
       const lineRef = mvj.lineRef || '?';
 
-      // Resolve location — fall back to cached position if GPS is temporarily absent
+      // Check whether this vehicle is heading to one of our monitored stops FIRST.
+      // This must happen before the location cache update so that outbound buses
+      // (opposite direction, different stop IDs in onwardCalls) never overwrite
+      // the cache with wrong-direction coordinates.
+      let depTimeAtStop = null;
+      for (const call of (mvj.onwardCalls || [])) {
+        const stopRef = (call.stopPointRef || '').split('/').pop();
+        if (monitoredStopIds.includes(stopRef)) {
+          const t = call.expectedDepartureTime || call.expectedArrivalTime
+                  || call.aimedDepartureTime   || call.aimedArrivalTime;
+          if (t) depTimeAtStop = new Date(t).getTime();
+          break;
+        }
+      }
+      if (depTimeAtStop === null) continue; // not heading to our stop — skip, don't cache
+
+      // Resolve location — fall back to cached position if GPS is temporarily absent.
+      // Cache is only updated for buses confirmed to serve our stops (above).
       const loc = mvj.vehicleLocation;
       let lat, lon, bearing;
       if (loc) {
@@ -690,20 +707,6 @@ app.get('/api/vehicles', async (req, res) => {
           continue; // no usable location
         }
       }
-
-      // Find the expected departure time at our stop so the frontend can match
-      // the right bus when multiple trips of the same line are active.
-      let depTimeAtStop = null;
-      for (const call of (mvj.onwardCalls || [])) {
-        const stopRef = (call.stopPointRef || '').split('/').pop();
-        if (monitoredStopIds.includes(stopRef)) {
-          const t = call.expectedDepartureTime || call.expectedArrivalTime
-                  || call.aimedDepartureTime   || call.aimedArrivalTime;
-          if (t) depTimeAtStop = new Date(t).getTime();
-          break; // nearest monitored stop is enough
-        }
-      }
-      if (depTimeAtStop === null) continue; // not actually heading to our stop
 
       buses.push({
         lineRef,
