@@ -601,12 +601,12 @@
       text-align: center;
       width: 100%;
       max-width: 480px;
-      background: rgba(4, 12, 28, 0.55);
+      background: rgba(4, 12, 28, 0.2);
       border-radius: 20px;
       padding: 32px 40px;
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      box-shadow: 0 8px 40px rgba(0,0,0,0.3);
     }
     #overlayRoute {
       font-size: 1.35rem;
@@ -1446,22 +1446,23 @@
       const dep1 = (cardDepIndex >= 0 && cardDepIndex < departures.length) ? departures[cardDepIndex] : null;
       const dep2 = (cardDepIndex >= 0 && cardDepIndex + 1 < departures.length) ? departures[cardDepIndex + 1] : null;
 
-      // Match bus to departure by lineRef + closest depTimeAtStop (within 10 min).
-      // This picks the correct trip when multiple buses of the same line are active.
+      // Match bus to departure by lineRef. The server already filters vehicles to
+      // those with our monitored stop in onwardCalls, so any bus of the right line
+      // is genuinely approaching our stop.
+      // When multiple buses of the same line are active, use depTimeAtStop proximity
+      // to pick the correct trip.
       const findBus = (dep) => {
         if (!dep) return null;
-        const candidates = (data.buses || []).filter(b =>
-          b.lineRef === dep.lineRef &&
-          b.depTimeAtStop !== null &&
-          Math.abs(b.depTimeAtStop - dep.departureTimeMs) < 10 * 60 * 1000
+        const byLine = (data.buses || []).filter(b => b.lineRef === dep.lineRef);
+        if (!byLine.length) return null;
+        // Only one active bus of this line — use it directly (time window not needed)
+        if (byLine.length === 1) return byLine[0];
+        // Multiple buses — pick the one whose expected stop time is closest
+        byLine.sort((a, b) =>
+          Math.abs((a.depTimeAtStop || 0) - dep.departureTimeMs) -
+          Math.abs((b.depTimeAtStop || 0) - dep.departureTimeMs)
         );
-        if (!candidates.length) return null;
-        // Pick the candidate whose depTimeAtStop is closest to the departure
-        candidates.sort((a, b) =>
-          Math.abs(a.depTimeAtStop - dep.departureTimeMs) -
-          Math.abs(b.depTimeAtStop - dep.departureTimeMs)
-        );
-        return candidates[0];
+        return byLine[0];
       };
       const bus1 = findBus(dep1);
       const bus2 = findBus(dep2);
