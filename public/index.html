@@ -103,6 +103,13 @@
       opacity: 0.5;
     }
 
+    /* Footer info strip below the table — less prominent than table rows */
+    .sub-header-footer {
+      margin-top: 8px;
+      font-size: 0.75rem;
+      opacity: 0.55;
+    }
+
     /* ── Main content ── */
     main {
       padding: 20px 24px;
@@ -721,8 +728,8 @@
       height: 0;
       border-left: 5px solid transparent;
       border-right: 5px solid transparent;
-      border-bottom: 11px solid rgba(255,255,255,0.92);
-      filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4));
+      border-bottom: 11px solid var(--nysse-dark);
+      filter: drop-shadow(0 0 3px rgba(255,255,255,0.8)) drop-shadow(0 1px 1px rgba(0,0,0,0.4));
     }
     .bus-marker {
       position: relative;
@@ -845,7 +852,7 @@
     </table>
   </div>
 
-  <div class="sub-header" style="border-radius:0 0 12px 12px; margin-top:0;">
+  <div class="sub-header sub-header-footer">
     <span id="stopInfo">Kaipanen · 10 min walk &nbsp;|&nbsp; Pitkäniitynkatu · 13 min walk</span>
     <span class="dot">·</span>
     <span id="lookaheadInfo">Next 60 min</span>
@@ -1467,8 +1474,9 @@
       const bus1 = findBus(dep1);
       const bus2 = findBus(dep2);
 
-      if (dep1) openColMap(1, data, bus1, dep1.stopId);
-      if (dep2) openColMap(2, data, bus2, dep2.stopId);
+      // Always call openColMap so it can close itself when dep/bus disappears
+      openColMap(1, data, bus1, dep1 && dep1.stopId);
+      openColMap(2, data, bus2, dep2 && dep2.stopId);
 
       if (overlayMap && document.getElementById('urgencyOverlay').style.display !== 'none') {
         syncOverlayMap(data, dep1);
