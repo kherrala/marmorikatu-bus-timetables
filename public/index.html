@@ -697,7 +697,37 @@
       height: 100%;
     }
 
+    /* Bus marker: wrapper holds the bearing arrow + circle */
+    .bus-marker-wrap {
+      position: relative;
+      width: 42px;
+      height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    /* Bearing arrow — rotates to point in direction of travel */
+    .bus-arrow {
+      position: absolute;
+      inset: 0;
+      transform-origin: center center;
+    }
+    .bus-arrow::after {
+      content: '';
+      position: absolute;
+      top: 1px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-bottom: 11px solid rgba(255,255,255,0.92);
+      filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4));
+    }
     .bus-marker {
+      position: relative;
+      z-index: 1;
       background: var(--nysse-blue);
       color: #fff;
       border-radius: 50%;
@@ -1264,6 +1294,21 @@
     return el;
   }
 
+  // Create a bus marker element: circle with line number + bearing arrow
+  function makeBusEl(lineRef, bearing) {
+    const wrap = document.createElement('div');
+    wrap.className = 'bus-marker-wrap';
+    const arrow = document.createElement('div');
+    arrow.className = 'bus-arrow';
+    arrow.style.transform = `rotate(${bearing || 0}deg)`;
+    const dot = document.createElement('div');
+    dot.className = 'bus-marker';
+    dot.textContent = lineRef;
+    wrap.appendChild(arrow);
+    wrap.appendChild(dot);
+    return wrap;
+  }
+
   function createGLMap(elementId) {
     const m = new maplibregl.Map({
       container: elementId,
@@ -1293,11 +1338,10 @@
     if (bus) {
       if (store.bus) {
         store.bus.setLngLat([bus.lon, bus.lat]);
-        store.bus.getElement().textContent = bus.lineRef;
+        store.bus.getElement().querySelector('.bus-marker').textContent = bus.lineRef;
+        store.bus.getElement().querySelector('.bus-arrow').style.transform = `rotate(${bus.bearing || 0}deg)`;
       } else {
-        const el = makeEl('bus-marker');
-        el.textContent = bus.lineRef;
-        store.bus = new maplibregl.Marker({ element: el, anchor: 'center' })
+        store.bus = new maplibregl.Marker({ element: makeBusEl(bus.lineRef, bus.bearing), anchor: 'center' })
           .setLngLat([bus.lon, bus.lat]).addTo(m);
       }
     } else if (store.bus) {
@@ -1305,20 +1349,20 @@
     }
   }
 
-  // Sync only the bus marker — used for column mini-maps (bus-focused, no clutter)
+  // Sync only the bus marker for column mini-maps (no home/stop clutter).
+  // Animates the map to follow the bus position; zoomed to street level.
   function syncBusMarker(m, store, bus) {
     if (bus) {
       if (store.bus) {
         store.bus.setLngLat([bus.lon, bus.lat]);
-        store.bus.getElement().textContent = bus.lineRef;
+        store.bus.getElement().querySelector('.bus-marker').textContent = bus.lineRef;
+        store.bus.getElement().querySelector('.bus-arrow').style.transform = `rotate(${bus.bearing || 0}deg)`;
       } else {
-        const el = makeEl('bus-marker');
-        el.textContent = bus.lineRef;
-        store.bus = new maplibregl.Marker({ element: el, anchor: 'center' })
+        store.bus = new maplibregl.Marker({ element: makeBusEl(bus.lineRef, bus.bearing), anchor: 'center' })
           .setLngLat([bus.lon, bus.lat]).addTo(m);
       }
-      m.setCenter([bus.lon, bus.lat]);
-      m.setZoom(15);
+      // Animate to bus location; if zoom differs jump straight, otherwise ease
+      m.easeTo({ center: [bus.lon, bus.lat], zoom: 14, duration: 1200, essential: true });
     } else if (store.bus) {
       store.bus.remove(); delete store.bus;
     }
@@ -1330,6 +1374,15 @@
     const store = colNum === 1 ? markers1 : markers2;
     const isOpen = containerEl.style.maxHeight && containerEl.style.maxHeight !== '0px';
 
+    // If there is no bus location yet, close/keep closed — nothing useful to show
+    if (!bus) {
+      if (isOpen) {
+        containerEl.style.maxHeight = '0px';
+        if (store.bus) { store.bus.remove(); delete store.bus; }
+      }
+      return;
+    }
+
     if (!isOpen) {
       containerEl.style.maxHeight = '130px';
       // Wait for CSS transition to complete before creating GL context
@@ -1340,7 +1393,6 @@
     const m = colNum === 1 ? colMap1 : colMap2;
     if (!m) return;
     m.resize();
-    // Column maps: show only the bus, zoomed in tight
     const doUpdate = () => syncBusMarker(m, store, bus);
     m.isStyleLoaded() ? doUpdate() : m.once('load', doUpdate);
   }

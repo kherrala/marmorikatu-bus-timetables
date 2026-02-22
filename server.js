@@ -97,9 +97,9 @@ const stopCoords = {};       // { stopId: { lat, lon } }
 let cachedDepartures = [];
 let cacheTimestamp = null;
 
-// Short-lived stop-monitoring cache (5 s) — deduplicates concurrent client refreshes
-// so we don't fire multiple identical upstream requests within the same refresh window.
-const SM_CACHE_TTL_MS = 5 * 1000;
+// Stop-monitoring cache — ITS Factory docs state the data changes at most once per minute,
+// so 30 s is well within freshness requirements and keeps upstream calls to ≤2/min.
+const SM_CACHE_TTL_MS = 30 * 1000;
 let smCache = null;         // { data, fetchedAt }
 let smFetchPromise = null;  // in-flight deduplication
 
