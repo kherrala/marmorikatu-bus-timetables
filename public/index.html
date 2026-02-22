@@ -1384,6 +1384,11 @@
     const store = colNum === 1 ? markers1 : markers2;
     const isOpen = containerEl.style.maxHeight && containerEl.style.maxHeight !== '0px';
 
+    // Increment generation on every call — including close calls (bus=null) —
+    // so that any in-flight open that is still awaiting the 650 ms CSS transition
+    // will detect it has been superseded and exit rather than re-adding a stale bus.
+    const myGen = ++colMapGen[colNum];
+
     // If there is no bus location yet, close/keep closed — nothing useful to show
     if (!bus) {
       if (isOpen) {
@@ -1392,11 +1397,6 @@
       }
       return;
     }
-
-    // Increment generation so any concurrent call that is still awaiting the
-    // CSS transition will detect it has been superseded and exit without
-    // overwriting this call's (newer) bus position.
-    const myGen = ++colMapGen[colNum];
 
     if (!isOpen) {
       containerEl.style.maxHeight = '130px';
