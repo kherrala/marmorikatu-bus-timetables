@@ -71,9 +71,9 @@ interface BusColumnProps {
 function BusColumn({ dep, now, status, label, isPrimary, bus, mapStyleUrl, overlayVisible }: BusColumnProps) {
   const leaveInMs = dep.leaveByMs - now;
   const busInMs = dep.departureTimeMs - now;
-  const leaveValueClass = isPrimary && status !== 'at-stop'
+  const leaveValueClass = status !== 'at-stop'
     ? `counter-value status-${status}`
-    : `counter-value${!isPrimary ? ' sm' : ''}`;
+    : 'counter-value';
 
   return (
     <div className={`next-col ${isPrimary ? 'primary' : 'secondary'}`}>
@@ -88,7 +88,7 @@ function BusColumn({ dep, now, status, label, isPrimary, bus, mapStyleUrl, overl
       <div className={`next-counters${status === 'at-stop' && isPrimary ? ' status-at-stop' : ''}`}>
         <div className="counter-block">
           <div className="counter-label">Bussi lähtee</div>
-          <div className={isPrimary ? 'counter-value' : 'counter-value sm'}>
+          <div className="counter-value">
             {formatCountdown(busInMs)}
           </div>
         </div>

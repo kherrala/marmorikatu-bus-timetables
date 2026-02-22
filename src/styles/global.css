@@ -179,8 +179,6 @@ main {
   gap: 10px;
 }
 
-.next-col.secondary .next-route { font-size: 1.05rem; }
-
 .next-line-badge {
   background: var(--nysse-blue);
   color: var(--white);
@@ -192,15 +190,11 @@ main {
   text-align: center;
 }
 
-.next-col.secondary .next-line-badge { font-size: 0.85rem; }
-
 .next-departs {
   font-size: 0.9rem;
   color: var(--text-muted);
   margin-bottom: 16px;
 }
-
-.next-col.secondary .next-departs { font-size: 0.8rem; margin-bottom: 12px; }
 
 .next-counters {
   display: flex;
