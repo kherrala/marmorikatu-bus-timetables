@@ -519,6 +519,18 @@ const VEHICLE_CACHE_TTL_MS = 12 * 1000; // 12 s — slightly under the 15 s clie
 let vehicleCache = null;    // { data: {...}, fetchedAt: number }
 let vehicleFetchPromise = null; // in-flight fetch de-duplication
 
+// Return unique line refs known to serve our monitored stops (from schedule cache).
+// Used to filter the vehicle-activity request so we only download relevant buses.
+function getKnownLineRefs() {
+  const refs = new Set();
+  for (const entries of Object.values(scheduleCache)) {
+    for (const e of entries) {
+      if (e.lineRef && e.lineRef !== '?') refs.add(e.lineRef);
+    }
+  }
+  return [...refs];
+}
+
 async function getVehicleData() {
   const now = Date.now();
   if (vehicleCache && now - vehicleCache.fetchedAt < VEHICLE_CACHE_TTL_MS) {
@@ -528,8 +540,12 @@ async function getVehicleData() {
   if (!vehicleFetchPromise) {
     vehicleFetchPromise = (async () => {
       try {
-        console.log('[api] vehicle-activity upstream fetch');
-        const vaRes = await fetch(`${API_BASE}/vehicle-activity`, { timeout: 10000 });
+        // Filter by known line refs so we only download buses that serve our stops.
+        // Falls back to unfiltered if schedule cache not yet built.
+        const lineRefs = getKnownLineRefs();
+        const lineParam = lineRefs.length > 0 ? `?lineRef=${lineRefs.join(',')}` : '';
+        console.log(`[api] vehicle-activity upstream fetch${lineRefs.length ? ` (lines: ${lineRefs.join(',')})` : ' (all)'}`);
+        const vaRes = await fetch(`${API_BASE}/vehicle-activity${lineParam}`, { timeout: 10000 });
         if (!vaRes.ok) throw new Error(`HTTP ${vaRes.status}`);
         const vaData = await vaRes.json();
         vehicleCache = { data: vaData.body || [], fetchedAt: Date.now() };
