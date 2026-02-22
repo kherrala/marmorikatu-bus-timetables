@@ -1043,9 +1043,9 @@
   const isUrgentBg  = status1 === 'urgent' || status1 === 'late';
   document.body.className = (alertBgPulse && isUrgentBg && !isSnoozed) ? 'state-' + status1 : '';
 
-  // Overlay: shows when leaving home is within 15 minutes and not snoozed
+  // Overlay: shows when leaving home is within 2 minutes and not snoozed
   const overlay     = document.getElementById('urgencyOverlay');
-  const showOverlay = alertOverlay && dep1 && leaveInMs1 < 15 * 60 * 1000 && !isSnoozed;
+  const showOverlay = alertOverlay && dep1 && leaveInMs1 < 2 * 60 * 1000 && !isSnoozed;
   if (showOverlay) {
     overlay.style.display = 'flex';
     overlay.className = 'state-' + status1;
