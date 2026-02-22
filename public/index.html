@@ -149,6 +149,24 @@
       border-left-color: var(--nysse-blue);
     }
 
+    /* Two-column layout inside the card */
+    .next-columns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+    }
+
+    .next-col {
+      padding-right: 24px;
+    }
+
+    .next-col.secondary {
+      padding-right: 0;
+      padding-left: 24px;
+      border-left: 1px solid rgba(255,255,255,0.1);
+      opacity: 0.7;
+    }
+
     .next-label {
       font-size: 0.75rem;
       text-transform: uppercase;
@@ -166,6 +184,8 @@
       gap: 10px;
     }
 
+    .next-col.secondary .next-route { font-size: 1.05rem; }
+
     .next-line-badge {
       background: var(--nysse-blue);
       color: var(--white);
@@ -177,15 +197,19 @@
       text-align: center;
     }
 
+    .next-col.secondary .next-line-badge { font-size: 0.85rem; }
+
     .next-departs {
       font-size: 0.9rem;
       color: var(--text-muted);
       margin-bottom: 16px;
     }
 
+    .next-col.secondary .next-departs { font-size: 0.8rem; margin-bottom: 12px; }
+
     .next-counters {
       display: flex;
-      gap: 32px;
+      gap: 24px;
       flex-wrap: wrap;
     }
 
@@ -210,6 +234,8 @@
       color: var(--white);
     }
 
+    .counter-value.sm { font-size: 1.6rem; }
+
     .counter-value.status-go     { color: var(--status-green); }
     .counter-value.status-soon   { color: var(--status-yellow); }
     .counter-value.status-urgent { color: var(--status-orange); }
@@ -230,9 +256,14 @@
       animation: pulse-green 1s ease-in-out infinite;
     }
 
-    /* Blink the leave-home counter and card border when urgent */
-    .next-bus-card.status-urgent {
+    /* Blink primary column when urgent */
+    .next-bus-card.status-urgent .next-col.primary {
       animation: blink-urgent 0.7s ease-in-out infinite;
+    }
+
+    @media (max-width: 560px) {
+      .next-columns { grid-template-columns: 1fr; }
+      .next-col.secondary { border-left: none; border-top: 1px solid rgba(255,255,255,0.1); padding-left: 0; padding-top: 16px; margin-top: 16px; }
     }
 
     /* ── Table ── */
@@ -520,10 +551,43 @@
       .replace(/"/g, '&quot;');
   }
 
-  // ── Render next-bus card ──
-  function renderNextBusCard(dep, now) {
+  // ── Render a single bus column (primary or secondary) ──
+  function colHtml(dep, now, isPrimary) {
+    const colClass = isPrimary ? 'primary' : 'secondary';
+    const labelText = isPrimary ? 'Seuraava' : 'Sen jälkeen';
+    const idSuffix = isPrimary ? '' : '2';
+    const status = getStatus(dep, now);
+    const busIn = formatCountdown(dep.departureTimeMs - now);
+    const leaveIn = formatCountdown(dep.leaveByMs - now);
+    const departs = formatTime(dep.departureTimeMs);
+    const leaveBy = formatTime(dep.leaveByMs);
+    const valClass = `counter-value${isPrimary ? '' : ' sm'}`;
+    const leaveClass = `${valClass}${status !== 'at-stop' ? ' status-' + status : ''}`;
+    return `
+      <div class="next-col ${colClass}">
+        <div class="next-label">${labelText}</div>
+        <div class="next-route">
+          <span class="next-line-badge">${escHtml(dep.lineRef)}</span>
+          <span>→ ${escHtml(dep.destinationName)}</span>
+        </div>
+        <div class="next-departs">Lähtee ${departs} &nbsp;·&nbsp; Lähde kotoa ${leaveBy}</div>
+        <div class="next-counters">
+          <div class="counter-block">
+            <div class="counter-label">Bussi lähtee</div>
+            <div class="${valClass}" id="nextBusIn${idSuffix}">${busIn}</div>
+          </div>
+          <div class="counter-block">
+            <div class="counter-label">Lähde kotoa</div>
+            <div class="${leaveClass}" id="nextLeaveIn${idSuffix}">${leaveIn}</div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  // ── Render next-bus card (dep1 = primary, dep2 = secondary, may be null) ──
+  function renderNextBusCard(dep1, dep2, now) {
     const card = document.getElementById('nextBusCard');
-    if (!dep) {
+    if (!dep1) {
       card.className = 'next-bus-card empty';
       card.innerHTML = `
         <div class="next-label">Seuraava lähtö</div>
@@ -531,37 +595,20 @@
       return;
     }
 
-    const status = getStatus(dep, now);
+    const status = getStatus(dep1, now);
     card.className = `next-bus-card status-${status}`;
-
-    const busIn = formatCountdown(dep.departureTimeMs - now);
-    const leaveIn = formatCountdown(dep.leaveByMs - now);
-    const departs = formatTime(dep.departureTimeMs);
-    const leaveBy = formatTime(dep.leaveByMs);
-
-    card.innerHTML = `
-      <div class="next-label">Seuraava lähtö</div>
-      <div class="next-route">
-        <span class="next-line-badge">${escHtml(dep.lineRef)}</span>
-        <span>→ ${escHtml(dep.destinationName)}</span>
-      </div>
-      <div class="next-departs">Lähtee ${departs} &nbsp;·&nbsp; Lähde kotoa ${leaveBy}</div>
-      <div class="next-counters">
-        <div class="counter-block">
-          <div class="counter-label">Bussi lähtee</div>
-          <div class="counter-value" id="nextBusIn">${busIn}</div>
-        </div>
-        <div class="counter-block">
-          <div class="counter-label">Lähde kotoa</div>
-          <div class="counter-value ${status !== 'at-stop' ? 'status-' + status : ''}" id="nextLeaveIn">${leaveIn}</div>
-        </div>
-      </div>`;
+    card.innerHTML = `<div class="next-columns">
+      ${colHtml(dep1, now, true)}
+      ${dep2 ? colHtml(dep2, now, false) : ''}
+    </div>`;
   }
 
-  // ── Find first departure that can still be caught (leaveByMs in future) ──
+  // ── Find first departure that can still be caught (with 5-min running grace) ──
+  // Even if the ideal walk time has passed, show the bus for 5 more minutes
+  // since you can still run to the stop.
   function findCatchableDep(now) {
-    // A bus is still catchable if leaveByMs hasn't passed yet
-    const idx = departures.findIndex(d => d.leaveByMs >= now);
+    const GRACE_MS = 5 * 60 * 1000;
+    const idx = departures.findIndex(d => d.leaveByMs >= now - GRACE_MS);
     return idx >= 0 ? idx : -1;
   }
 
@@ -569,29 +616,42 @@
   function renderCountdowns() {
     const now = Date.now();
 
-    // Determine which departure to feature in the card:
-    // prefer the first one you can still catch, fall back to first in list
-    const catchableIdx = findCatchableDep(now);
-    const targetIdx = catchableIdx >= 0 ? catchableIdx : (departures.length > 0 ? 0 : -1);
+    // Primary: first catchable departure (or within 5-min grace to run)
+    const primaryIdx = findCatchableDep(now);
+    const targetIdx = primaryIdx >= 0 ? primaryIdx : (departures.length > 0 ? 0 : -1);
+    // Secondary: the one right after primary
+    const secondaryIdx = (targetIdx >= 0 && targetIdx + 1 < departures.length) ? targetIdx + 1 : -1;
+
+    const dep1 = targetIdx >= 0 ? departures[targetIdx] : null;
+    const dep2 = secondaryIdx >= 0 ? departures[secondaryIdx] : null;
 
     if (targetIdx < 0) {
-      if (cardDepIndex !== -1) { renderNextBusCard(null, now); cardDepIndex = -1; }
+      if (cardDepIndex !== -1) { renderNextBusCard(null, null, now); cardDepIndex = -1; }
     } else {
-      const dep = departures[targetIdx];
-      // Re-render full card when the featured departure changes
       if (targetIdx !== cardDepIndex) {
-        renderNextBusCard(dep, now);
+        // Featured departure changed — full card re-render
+        renderNextBusCard(dep1, dep2, now);
         cardDepIndex = targetIdx;
       } else {
-        // Just update the live counters inside the existing card
+        // Tick-update: just update live counter text and status classes in-place
+        const status = getStatus(dep1, now);
+
+        // Primary column
         const busInEl = document.getElementById('nextBusIn');
         const leaveInEl = document.getElementById('nextLeaveIn');
-        if (busInEl) busInEl.textContent = formatCountdown(dep.departureTimeMs - now);
+        if (busInEl) busInEl.textContent = formatCountdown(dep1.departureTimeMs - now);
         if (leaveInEl) {
-          leaveInEl.textContent = formatCountdown(dep.leaveByMs - now);
-          const status = getStatus(dep, now);
+          leaveInEl.textContent = formatCountdown(dep1.leaveByMs - now);
           leaveInEl.className = `counter-value status-${status}`;
-          document.getElementById('nextBusCard').className = `next-bus-card status-${status}`;
+        }
+        document.getElementById('nextBusCard').className = `next-bus-card status-${status}`;
+
+        // Secondary column (if present)
+        if (dep2) {
+          const busIn2El = document.getElementById('nextBusIn2');
+          const leaveIn2El = document.getElementById('nextLeaveIn2');
+          if (busIn2El) busIn2El.textContent = formatCountdown(dep2.departureTimeMs - now);
+          if (leaveIn2El) leaveIn2El.textContent = formatCountdown(dep2.leaveByMs - now);
         }
       }
     }

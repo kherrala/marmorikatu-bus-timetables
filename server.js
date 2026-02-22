@@ -407,7 +407,16 @@ app.get('/api/departures', async (req, res) => {
 // --- Start ---
 (async () => {
   await discoverStopIds();
-  await buildScheduleCache();
+
+  // Start serving immediately — schedule cache builds in the background.
+  // Real-time data from stop-monitoring and vehicle-activity is available right away.
+  app.listen(PORT, () => {
+    console.log(`Marmorikatu bus dashboard running at http://localhost:${PORT}`);
+    console.log(`Monitoring stops: ${monitoredStopIds.join(', ')}`);
+  });
+
+  // Build schedule cache after server is up (provides scheduled departures not yet in real-time system)
+  buildScheduleCache().catch(err => console.warn('Initial schedule cache build failed:', err.message));
 
   // Refresh schedule cache at 05:00 local time daily
   setInterval(async function() {
@@ -416,9 +425,4 @@ app.get('/api/departures', async (req, res) => {
       await buildScheduleCache();
     }
   }, 60 * 1000);
-
-  app.listen(PORT, () => {
-    console.log(`Marmorikatu bus dashboard running at http://localhost:${PORT}`);
-    console.log(`Monitoring stops: ${monitoredStopIds.join(', ')}`);
-  });
 })();
