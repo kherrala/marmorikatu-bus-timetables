@@ -31,13 +31,41 @@ const ALERT_BAR      = process.env.ALERT_BAR      !== 'false';
 const ALERT_BG_PULSE = process.env.ALERT_BG_PULSE !== 'false';
 const ALERT_OVERLAY  = process.env.ALERT_OVERLAY  !== 'false';
 
-// Map style (Mapbox GL / MapLibre GL vector tiles)
-// MML_API_KEY: free key from maanmittauslaitos.fi → uses Finnish taustakartta vector tiles
-// Otherwise falls back to CartoDB dark-matter (free, no key required)
-const MML_API_KEY = process.env.MML_API_KEY || '';
-const MAP_STYLE_URL = MML_API_KEY
-  ? `https://avoin-karttakuva.maanmittauslaitos.fi/avoin/vectortiles/taustakartta/v20/style-taustakartta.json?api-key=${MML_API_KEY}`
-  : 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+// Map style (MapLibre GL vector tiles)
+// MML_API_KEY: free key from maanmittauslaitos.fi → proxied MML taustakartta vector tiles
+// (CORS blocked if fetched directly; proxy keeps API key server-side)
+// No key → CartoDB dark-matter vector style (free, browser-accessible)
+const MML_API_KEY   = process.env.MML_API_KEY || '';
+const MML_ORIGIN    = 'https://avoin-karttakuva.maanmittauslaitos.fi';
+const CARTO_STYLE   = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+
+// Rewritten MML style JSON cache (rebuilt when serverBase changes or after 1h)
+let mmlStyleCache     = null;
+let mmlStyleCacheBase = '';
+let mmlStyleCacheTime = 0;
+
+async function getMmlStyle(serverBase) {
+  if (mmlStyleCache && mmlStyleCacheBase === serverBase && Date.now() - mmlStyleCacheTime < 3600 * 1000) {
+    return mmlStyleCache;
+  }
+  const url = `${MML_ORIGIN}/vectortiles/stylejson/v20/taustakartta.json?api-key=${MML_API_KEY}`;
+  const res = await fetch(url, { timeout: 15000 });
+  if (!res.ok) throw new Error(`MML style HTTP ${res.status}`);
+  let styleText = await res.text();
+
+  // Rewrite all MML origin URLs in the style JSON to go through our proxy.
+  // The proxy adds the API key back when forwarding to MML, so strip it from style URLs.
+  const mmlPattern = MML_ORIGIN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  styleText = styleText
+    .replace(new RegExp(mmlPattern, 'g'), `${serverBase}/api/mml-proxy`)
+    .replace(/\?api-key=[^"&]*/g, '')
+    .replace(/&api-key=[^"&]*/g, '');
+
+  mmlStyleCache     = styleText;
+  mmlStyleCacheBase = serverBase;
+  mmlStyleCacheTime = Date.now();
+  return mmlStyleCache;
+}
 
 // STOP_IDS: explicit comma-separated list of stop IDs (city-direction).
 // Kaipanen city-direction: 4431, Pitkäniitynkatu city-direction: 4087
@@ -68,6 +96,32 @@ const stopCoords = {};       // { stopId: { lat, lon } }
 // --- Cached data ---
 let cachedDepartures = [];
 let cacheTimestamp = null;
+
+// Short-lived stop-monitoring cache (5 s) — deduplicates concurrent client refreshes
+// so we don't fire multiple identical upstream requests within the same refresh window.
+const SM_CACHE_TTL_MS = 5 * 1000;
+let smCache = null;         // { data, fetchedAt }
+let smFetchPromise = null;  // in-flight deduplication
+
+async function getStopMonitoring(stopIds) {
+  const now = Date.now();
+  if (smCache && now - smCache.fetchedAt < SM_CACHE_TTL_MS) return smCache.data;
+  if (!smFetchPromise) {
+    smFetchPromise = (async () => {
+      try {
+        console.log('[api] stop-monitoring upstream fetch');
+        const res = await fetch(`${API_BASE}/stop-monitoring?stops=${stopIds}`, { timeout: 15000 });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        smCache = { data, fetchedAt: Date.now() };
+      } finally {
+        smFetchPromise = null;
+      }
+    })();
+  }
+  await smFetchPromise;
+  return smCache ? smCache.data : { body: {} };
+}
 
 // Schedule cache: { stopId: [{lineRef, headSign, departureTimeMs}] }
 // Built from the journeys API for the current service day.
@@ -325,11 +379,9 @@ async function fetchDepartures() {
   const now = Date.now();
   const lookaheadMs = LOOKAHEAD_MINUTES * 60 * 1000;
 
-  // 1. Real-time: stop-monitoring
+  // 1. Real-time: stop-monitoring (5 s server-side cache to deduplicate concurrent client polls)
   const stopIds = monitoredStopIds.join(',');
-  const smRes = await fetch(`${API_BASE}/stop-monitoring?stops=${stopIds}`, { timeout: 15000 });
-  if (!smRes.ok) throw new Error(`stop-monitoring API returned HTTP ${smRes.status}`);
-  const smData = await smRes.json();
+  const smData = await getStopMonitoring(stopIds);
   const smBody = smData.body || {};
 
   const allEntries = [];
@@ -490,8 +542,11 @@ async function getVehicleData() {
   return vehicleCache ? vehicleCache.data : [];
 }
 
-// --- Request logger ---
+// --- Request logger (skip high-volume tile proxy paths) ---
 app.use((req, res, next) => {
+  if (req.path.startsWith('/api/mml-proxy/')) {
+    next(); return;
+  }
   const start = Date.now();
   res.on('finish', () => {
     const ms = Date.now() - start;
@@ -504,6 +559,12 @@ app.use((req, res, next) => {
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/api/config', (req, res) => {
+  const proto = req.headers['x-forwarded-proto'] || req.protocol;
+  const serverBase = `${proto}://${req.get('host')}`;
+  const mapStyleUrl = MML_API_KEY
+    ? `${serverBase}/api/mml/style.json`
+    : CARTO_STYLE;
+
   // Build per-stop walking minutes map for the frontend
   const stopWalkingMinutes = {};
   monitoredStopIds.forEach(id => {
@@ -519,8 +580,60 @@ app.get('/api/config', (req, res) => {
     alertBar: ALERT_BAR,
     alertBgPulse: ALERT_BG_PULSE,
     alertOverlay: ALERT_OVERLAY,
-    mapStyleUrl: MAP_STYLE_URL,
+    mapStyleUrl,
   });
+});
+
+// ── MML vector tile proxy ──
+// Serves the rewritten style JSON (MML origin URLs replaced with local proxy paths).
+app.get('/api/mml/style.json', async (req, res) => {
+  if (!MML_API_KEY) { res.status(404).json({ error: 'MML_API_KEY not configured' }); return; }
+  const proto = req.headers['x-forwarded-proto'] || req.protocol;
+  const serverBase = `${proto}://${req.get('host')}`;
+  try {
+    const styleJson = await getMmlStyle(serverBase);
+    res.set('Content-Type', 'application/json');
+    res.send(styleJson);
+  } catch (err) {
+    console.error('MML style fetch failed:', err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// Generic catch-all that proxies any MML resource (tiles, sprites, glyphs, tilejson…).
+// The API key is added server-side so it never leaks to the browser.
+// JSON responses (e.g. TileJSON) also have MML URLs rewritten through this proxy.
+app.get('/api/mml-proxy/*', async (req, res) => {
+  if (!MML_API_KEY) { res.status(404).end(); return; }
+  const mmlPath = req.params[0];
+  const qs = new URLSearchParams(req.query);
+  qs.set('api-key', MML_API_KEY);
+  const url = `${MML_ORIGIN}/${mmlPath}?${qs.toString()}`;
+  try {
+    const upRes = await fetch(url, { timeout: 15000 });
+    if (!upRes.ok) { res.status(upRes.status).end(); return; }
+    const ct = upRes.headers.get('content-type') || 'application/octet-stream';
+    res.set('Content-Type', ct);
+    res.set('Cache-Control', 'public, max-age=86400');
+
+    if (ct.includes('application/json')) {
+      // Rewrite any embedded MML origin URLs (TileJSON contains tile URL templates)
+      const proto = req.headers['x-forwarded-proto'] || req.protocol;
+      const serverBase = `${proto}://${req.get('host')}`;
+      const mmlPat = MML_ORIGIN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      let text = await upRes.text();
+      text = text
+        .replace(new RegExp(mmlPat, 'g'), `${serverBase}/api/mml-proxy`)
+        .replace(/\?api-key=[^"&]*/g, '')
+        .replace(/&api-key=[^"&]*/g, '');
+      res.send(text);
+    } else {
+      upRes.body.pipe(res);
+    }
+  } catch (err) {
+    console.error('MML proxy error for', mmlPath, '-', err.message);
+    res.status(502).end();
+  }
 });
 
 app.get('/api/version', (req, res) => {
