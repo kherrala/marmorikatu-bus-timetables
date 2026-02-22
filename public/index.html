@@ -1282,6 +1282,10 @@
   let overlayMap = null;
   const markers1 = {};
   const markers2 = {};
+  // Generation counters — incremented on every openColMap call.
+  // After the 650 ms transition await, stale calls check this and exit
+  // rather than overwriting a newer bus position.
+  const colMapGen = [0, 0, 0]; // index 1 and 2 used
   const overlayMarkers = {};
   let dep1LineRef = null;
   let dep2LineRef = null;
@@ -1374,7 +1378,7 @@
     }
   }
 
-  async function openColMap(colNum, data, bus, stopId) {
+  async function openColMap(colNum, data, bus) {
     const containerEl = document.getElementById(`colMap${colNum}Container`);
     const mapId = `colMap${colNum}`;
     const store = colNum === 1 ? markers1 : markers2;
@@ -1389,14 +1393,21 @@
       return;
     }
 
+    // Increment generation so any concurrent call that is still awaiting the
+    // CSS transition will detect it has been superseded and exit without
+    // overwriting this call's (newer) bus position.
+    const myGen = ++colMapGen[colNum];
+
     if (!isOpen) {
       containerEl.style.maxHeight = '130px';
       // Create the GL map immediately so tiles/sprites/glyphs load during the
       // CSS transition rather than after it — cuts perceived startup delay.
       if (colNum === 1 && !colMap1) colMap1 = createGLMap(mapId);
       if (colNum === 2 && !colMap2) colMap2 = createGLMap(mapId);
-      // Still wait for the transition before calling resize()
+      // Wait for the CSS transition before calling resize()
       await new Promise(r => setTimeout(r, 650));
+      // Bail out if a newer call has already taken over this column
+      if (colMapGen[colNum] !== myGen) return;
     }
     const m = colNum === 1 ? colMap1 : colMap2;
     if (!m) return;
@@ -1480,8 +1491,8 @@
       const bus2 = findBus(dep2);
 
       // Always call openColMap so it can close itself when dep/bus disappears
-      openColMap(1, data, bus1, dep1 && dep1.stopId);
-      openColMap(2, data, bus2, dep2 && dep2.stopId);
+      openColMap(1, data, bus1);
+      openColMap(2, data, bus2);
 
       if (overlayMap && document.getElementById('urgencyOverlay').style.display !== 'none') {
         syncOverlayMap(data, dep1);
