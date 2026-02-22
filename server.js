@@ -93,6 +93,11 @@ let stopLabels = {};
 let homeCoords = null;       // { lat, lon } — geocoded from HOME_ADDRESS
 const stopCoords = {};       // { stopId: { lat, lon } }
 
+// Per-vehicle last-known location cache (2 min TTL).
+// Fills in GPS gaps when vehicle-activity temporarily omits vehicleLocation.
+const vehicleLocCache = {};  // lineRef -> { lat, lon, bearing, cachedAt }
+const VEHICLE_LOC_TTL_MS = 2 * 60 * 1000;
+
 // --- Cached data ---
 let cachedDepartures = [];
 let cacheTimestamp = null;
@@ -453,10 +458,11 @@ async function fetchDepartures() {
       if (e.departureTimeMs < now - 2 * 60 * 1000) continue;
       if (e.departureTimeMs > now + lookaheadMs) continue;
 
-      // Skip if real-time already has this departure (same line, within 3 minutes)
+      // Skip if real-time already has this departure (same line, within 10 minutes).
+      // 10 min covers buses running significantly late without merging distinct trips.
       const hasRealtime = realtimeDepartures.some(r =>
         r.lineRef === e.lineRef &&
-        Math.abs(r.departureTimeMs - e.departureTimeMs) < 3 * 60 * 1000
+        Math.abs(r.departureTimeMs - e.departureTimeMs) < 10 * 60 * 1000
       );
       if (hasRealtime) continue;
 
@@ -663,24 +669,49 @@ app.get('/api/vehicles', async (req, res) => {
     const buses = [];
     for (const v of vehicles) {
       const mvj = v.monitoredVehicleJourney || {};
-      const loc = mvj.vehicleLocation;
-      if (!loc) continue;
-      const lat = parseFloat(loc.latitude ?? loc.lat ?? loc.y);
-      const lon = parseFloat(loc.longitude ?? loc.lon ?? loc.x);
-      if (isNaN(lat) || isNaN(lon) || lat === 0) continue;
+      const lineRef = mvj.lineRef || '?';
 
-      const passesOurStop = (mvj.onwardCalls || []).some(call => {
+      // Resolve location — fall back to cached position if GPS is temporarily absent
+      const loc = mvj.vehicleLocation;
+      let lat, lon, bearing;
+      if (loc) {
+        lat     = parseFloat(loc.latitude  ?? loc.lat ?? loc.y);
+        lon     = parseFloat(loc.longitude ?? loc.lon ?? loc.x);
+        bearing = parseFloat(mvj.bearing || 0);
+        if (!isNaN(lat) && !isNaN(lon) && lat !== 0) {
+          vehicleLocCache[lineRef] = { lat, lon, bearing, cachedAt: Date.now() };
+        }
+      }
+      if (isNaN(lat) || isNaN(lon) || lat === 0) {
+        const cached = vehicleLocCache[lineRef];
+        if (cached && Date.now() - cached.cachedAt < VEHICLE_LOC_TTL_MS) {
+          ({ lat, lon, bearing } = cached);
+        } else {
+          continue; // no usable location
+        }
+      }
+
+      // Find the expected departure time at our stop so the frontend can match
+      // the right bus when multiple trips of the same line are active.
+      let depTimeAtStop = null;
+      for (const call of (mvj.onwardCalls || [])) {
         const stopRef = (call.stopPointRef || '').split('/').pop();
-        return monitoredStopIds.includes(stopRef);
-      });
-      if (!passesOurStop) continue;
+        if (monitoredStopIds.includes(stopRef)) {
+          const t = call.expectedDepartureTime || call.expectedArrivalTime
+                  || call.aimedDepartureTime   || call.aimedArrivalTime;
+          if (t) depTimeAtStop = new Date(t).getTime();
+          break; // nearest monitored stop is enough
+        }
+      }
+      if (depTimeAtStop === null) continue; // not actually heading to our stop
 
       buses.push({
-        lineRef: mvj.lineRef || '?',
+        lineRef,
         lat,
         lon,
-        bearing: parseFloat(mvj.bearing || 0),
+        bearing,
         destinationName: stopNameCache[mvj.destinationShortName] || mvj.destinationShortName || '',
+        depTimeAtStop,   // ms — used by frontend to match the correct trip
       });
     }
 

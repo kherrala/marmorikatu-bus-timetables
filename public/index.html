@@ -258,8 +258,10 @@
       animation: pulse-green 1s ease-in-out infinite;
     }
 
-    /* Blink primary column when urgent */
-    .next-bus-card.status-urgent .next-col.primary {
+    /* Blink only the route header text when urgent, not counters or map */
+    .next-bus-card.status-urgent .next-col.primary .next-label,
+    .next-bus-card.status-urgent .next-col.primary .next-route,
+    .next-bus-card.status-urgent .next-col.primary .next-departs {
       animation: blink-urgent 0.7s ease-in-out infinite;
     }
 
@@ -599,11 +601,11 @@
       text-align: center;
       width: 100%;
       max-width: 480px;
-      background: rgba(4, 12, 28, 0.82);
+      background: rgba(4, 12, 28, 0.55);
       border-radius: 20px;
       padding: 32px 40px;
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
       box-shadow: 0 8px 40px rgba(0,0,0,0.5);
     }
     #overlayRoute {
@@ -679,10 +681,6 @@
       transition: none;
     }
 
-    /* Prevent map container from blinking with the urgent column */
-    .next-bus-card.status-urgent .next-col.primary .col-map-container {
-      animation: none;
-    }
 
     /* ── Overlay background map ── */
     #overlayMapWrap {
@@ -716,7 +714,7 @@
     .bus-arrow::after {
       content: '';
       position: absolute;
-      top: 1px;
+      top: -7px;  /* sits clearly above the circle, not overlapping it */
       left: 50%;
       transform: translateX(-50%);
       width: 0;
@@ -1448,8 +1446,25 @@
       const dep1 = (cardDepIndex >= 0 && cardDepIndex < departures.length) ? departures[cardDepIndex] : null;
       const dep2 = (cardDepIndex >= 0 && cardDepIndex + 1 < departures.length) ? departures[cardDepIndex + 1] : null;
 
-      const bus1 = dep1 ? (data.buses || []).find(b => b.lineRef === dep1.lineRef) || null : null;
-      const bus2 = dep2 ? (data.buses || []).find(b => b.lineRef === dep2.lineRef) || null : null;
+      // Match bus to departure by lineRef + closest depTimeAtStop (within 10 min).
+      // This picks the correct trip when multiple buses of the same line are active.
+      const findBus = (dep) => {
+        if (!dep) return null;
+        const candidates = (data.buses || []).filter(b =>
+          b.lineRef === dep.lineRef &&
+          b.depTimeAtStop !== null &&
+          Math.abs(b.depTimeAtStop - dep.departureTimeMs) < 10 * 60 * 1000
+        );
+        if (!candidates.length) return null;
+        // Pick the candidate whose depTimeAtStop is closest to the departure
+        candidates.sort((a, b) =>
+          Math.abs(a.depTimeAtStop - dep.departureTimeMs) -
+          Math.abs(b.depTimeAtStop - dep.departureTimeMs)
+        );
+        return candidates[0];
+      };
+      const bus1 = findBus(dep1);
+      const bus2 = findBus(dep2);
 
       if (dep1) openColMap(1, data, bus1, dep1.stopId);
       if (dep2) openColMap(2, data, bus2, dep2.stopId);
