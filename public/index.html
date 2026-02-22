@@ -221,8 +221,18 @@
       50%       { opacity: 0.4; }
     }
 
+    @keyframes blink-urgent {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.15; }
+    }
+
     .status-at-stop .counter-value {
       animation: pulse-green 1s ease-in-out infinite;
+    }
+
+    /* Blink the leave-home counter and card border when urgent */
+    .next-bus-card.status-urgent {
+      animation: blink-urgent 0.7s ease-in-out infinite;
     }
 
     /* ── Table ── */
@@ -432,6 +442,7 @@
   let departures = [];
   let fetchedAt = null;
   let isFetching = false;
+  let cardDepIndex = -1; // index of departure currently shown in next-bus card
 
   // ── Utilities ──
   function pad2(n) { return String(Math.floor(Math.abs(n))).padStart(2, '0'); }
@@ -547,27 +558,42 @@
       </div>`;
   }
 
+  // ── Find first departure that can still be caught (leaveByMs in future) ──
+  function findCatchableDep(now) {
+    // A bus is still catchable if leaveByMs hasn't passed yet
+    const idx = departures.findIndex(d => d.leaveByMs >= now);
+    return idx >= 0 ? idx : -1;
+  }
+
   // ── Live countdowns (every second) ──
   function renderCountdowns() {
     const now = Date.now();
 
-    // Update next-bus card counters
-    const firstDep = departures[0];
-    if (firstDep) {
-      const busInEl = document.getElementById('nextBusIn');
-      const leaveInEl = document.getElementById('nextLeaveIn');
-      if (busInEl) busInEl.textContent = formatCountdown(firstDep.departureTimeMs - now);
-      if (leaveInEl) {
-        const ms = firstDep.leaveByMs - now;
-        leaveInEl.textContent = formatCountdown(ms);
-        const status = getStatus(firstDep, now);
-        leaveInEl.className = `counter-value status-${status}`;
-        // Update card border
-        const card = document.getElementById('nextBusCard');
-        card.className = `next-bus-card status-${status}`;
-      }
+    // Determine which departure to feature in the card:
+    // prefer the first one you can still catch, fall back to first in list
+    const catchableIdx = findCatchableDep(now);
+    const targetIdx = catchableIdx >= 0 ? catchableIdx : (departures.length > 0 ? 0 : -1);
+
+    if (targetIdx < 0) {
+      if (cardDepIndex !== -1) { renderNextBusCard(null, now); cardDepIndex = -1; }
     } else {
-      renderNextBusCard(null, now);
+      const dep = departures[targetIdx];
+      // Re-render full card when the featured departure changes
+      if (targetIdx !== cardDepIndex) {
+        renderNextBusCard(dep, now);
+        cardDepIndex = targetIdx;
+      } else {
+        // Just update the live counters inside the existing card
+        const busInEl = document.getElementById('nextBusIn');
+        const leaveInEl = document.getElementById('nextLeaveIn');
+        if (busInEl) busInEl.textContent = formatCountdown(dep.departureTimeMs - now);
+        if (leaveInEl) {
+          leaveInEl.textContent = formatCountdown(dep.leaveByMs - now);
+          const status = getStatus(dep, now);
+          leaveInEl.className = `counter-value status-${status}`;
+          document.getElementById('nextBusCard').className = `next-bus-card status-${status}`;
+        }
+      }
     }
 
     // Update table rows
@@ -575,7 +601,6 @@
       const cdEl = document.getElementById(`cd-${i}`);
       const rowEl = document.getElementById(`row-${i}`);
       if (!cdEl || !rowEl) return;
-
       const status = getStatus(dep, now);
       cdEl.textContent = formatCountdown(dep.departureTimeMs - now);
       rowEl.className = `row-status-${status}`;
@@ -604,8 +629,8 @@
         errorBanner.classList.remove('visible');
       }
 
+      cardDepIndex = -1; // force card re-render with new data
       renderTable();
-      renderNextBusCard(departures[0], Date.now());
       document.getElementById('updatedLabel').textContent = `Päivitetty: ${formatTime(fetchedAt)}`;
     } catch (err) {
       const errorBanner = document.getElementById('errorBanner');
