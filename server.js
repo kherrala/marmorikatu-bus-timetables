@@ -360,17 +360,31 @@ async function fetchDepartures() {
     }
   }
 
-  // 4. Merge, sort, deduplicate
+  // 4. Merge and sort
   const all = [...realtimeDepartures, ...scheduledDepartures];
   all.sort((a, b) => a.departureTimeMs - b.departureTimeMs);
 
-  const seen = new Set();
-  return all.filter(d => {
-    const key = `${d.lineRef}|${Math.floor(d.departureTimeMs / 60000)}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  // 5. Deduplicate: same line within 5-minute window (same bus passing multiple monitored stops)
+  //    Keep the entry with the latest leaveByMs — i.e. the stop that gives the most time at home.
+  //    Example: 8B at Kaipanen 10:15 (walk 10min → leave 10:05) vs Pitkäniitynkatu 10:17 (walk 13min → leave 10:04)
+  //    → keep Kaipanen because leaveByMs 10:05 > 10:04.
+  const lastSeen = new Map(); // lineRef → { resultIdx, departureTimeMs, leaveByMs }
+  const result = [];
+  for (const d of all) {
+    const prev = lastSeen.get(d.lineRef);
+    if (prev && Math.abs(prev.departureTimeMs - d.departureTimeMs) < 5 * 60 * 1000) {
+      // Same bus at a different stop — keep whichever gives more time at home
+      if (d.leaveByMs > result[prev.resultIdx].leaveByMs) {
+        result[prev.resultIdx] = d;
+        lastSeen.set(d.lineRef, { resultIdx: prev.resultIdx, departureTimeMs: d.departureTimeMs, leaveByMs: d.leaveByMs });
+      }
+    } else {
+      const resultIdx = result.length;
+      result.push(d);
+      lastSeen.set(d.lineRef, { resultIdx, departureTimeMs: d.departureTimeMs, leaveByMs: d.leaveByMs });
+    }
+  }
+  return result;
 }
 
 // --- Routes ---

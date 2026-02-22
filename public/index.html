@@ -625,6 +625,14 @@
       font-size: 0.95rem;
       line-height: 1.8;
     }
+    #overlayDismissHint {
+      margin-top: 28px;
+      font-size: 0.72rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.25);
+    }
+    #urgencyOverlay { cursor: pointer; }
   </style>
 </head>
 <body>
@@ -729,13 +737,14 @@
   </div>
 </div>
 
-<!-- Full-screen urgency takeover overlay (hidden until urgent/late) -->
-<div id="urgencyOverlay" style="display:none">
+<!-- Full-screen urgency takeover overlay (tap anywhere to snooze) -->
+<div id="urgencyOverlay" style="display:none" onclick="dismissOverlayAlert()">
   <div id="overlayInner">
     <div id="overlayRoute"></div>
     <div id="overlayTitle">LÄHDE KOTOA</div>
     <div id="overlayCountdown">--:--</div>
     <div id="overlayDetails"></div>
+    <div id="overlayDismissHint">Kosketa poistuaksesi</div>
   </div>
 </div>
 
@@ -751,6 +760,21 @@
   let alertBar = true;
   let alertBgPulse = true;
   let alertOverlay = true;
+
+  // Overlay snooze state
+  let currentPrimaryDep = null;  // dep1 from last renderCountdowns tick
+  let dismissedDepKey = null;    // key of departure the user snoozed by tapping
+
+  function getDepKey(dep) {
+    if (!dep) return null;
+    return `${dep.lineRef}|${Math.floor(dep.departureTimeMs / 60000)}`;
+  }
+
+  function dismissOverlayAlert() {
+    dismissedDepKey = getDepKey(currentPrimaryDep);
+    document.getElementById('urgencyOverlay').style.display = 'none';
+    document.body.className = '';
+  }
 
   // ── Settings panel ──
   function loadAlertSettings(serverDefaults) {
@@ -947,6 +971,10 @@
       if (targetIdx !== cardDepIndex) {
         // Featured departure changed — full card re-render
         renderNextBusCard(dep1, dep2, now);
+        // Auto-clear snooze when we switch to a genuinely different departure
+        if (dismissedDepKey !== null && dismissedDepKey !== getDepKey(dep1)) {
+          dismissedDepKey = null;
+        }
         cardDepIndex = targetIdx;
       } else {
         // Tick-update: just update live counter text and status classes in-place
@@ -992,13 +1020,21 @@
   }
 
   // ── Background pulse + takeover overlay ──
-  const status1 = dep1 ? getStatus(dep1, now) : 'go';
-  const isAlarm = status1 === 'urgent' || status1 === 'late';
+  currentPrimaryDep = dep1;
+  const currentKey  = getDepKey(dep1);
+  const isSnoozed   = dep1 !== null && dismissedDepKey === currentKey;
 
-  document.body.className = (alertBgPulse && isAlarm) ? 'state-' + status1 : '';
+  const status1     = dep1 ? getStatus(dep1, now) : 'go';
+  const leaveInMs1  = dep1 ? dep1.leaveByMs - now : Infinity;
 
-  const overlay = document.getElementById('urgencyOverlay');
-  if (alertOverlay && isAlarm && dep1) {
+  // Background pulse: only when very close (urgent/late) and not snoozed
+  const isUrgentBg  = status1 === 'urgent' || status1 === 'late';
+  document.body.className = (alertBgPulse && isUrgentBg && !isSnoozed) ? 'state-' + status1 : '';
+
+  // Overlay: shows when leaving home is within 15 minutes and not snoozed
+  const overlay     = document.getElementById('urgencyOverlay');
+  const showOverlay = alertOverlay && dep1 && leaveInMs1 < 15 * 60 * 1000 && !isSnoozed;
+  if (showOverlay) {
     overlay.style.display = 'flex';
     overlay.className = 'state-' + status1;
     document.getElementById('overlayRoute').innerHTML =
