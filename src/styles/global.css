@@ -175,15 +175,9 @@ main {
   font-weight: 700;
   margin-bottom: 4px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
-  overflow: hidden;
-}
-
-.next-route span:last-child {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-height: 3.5rem;
 }
 
 .next-line-badge {
