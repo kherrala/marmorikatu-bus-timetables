@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Config, Departure, VehicleData, Bus } from './types';
 import { getDepKey, getStatus, findCatchableDep, formatTime } from './utils';
 import Header from './components/Header';
@@ -179,23 +179,6 @@ export default function App() {
   return (
     <>
       <Header address={homeAddress} now={now} onSettingsClick={() => setSettingsOpen(true)} />
-
-      <div className="sub-header">
-        {stopInfoParts.length > 0 ? (
-          <>
-            {stopInfoParts.map((part, i) => (
-              <React.Fragment key={i}>
-                {i > 0 && <span className="dot">·</span>}
-                <span>{part}</span>
-              </React.Fragment>
-            ))}
-          </>
-        ) : (
-          <span>Ladataan…</span>
-        )}
-        <span className="dot">·</span>
-        <span>Seuraavat {lookaheadMinutes} min</span>
-      </div>
 
       <UrgencyBar dep1={dep1} now={now} visible={alertBar} />
 
