@@ -395,6 +395,9 @@ async function fetchDepartures() {
   return result;
 }
 
+// Startup timestamp used as version token — changes on every container restart/redeploy
+const SERVER_START_TIME = Date.now();
+
 // --- Routes ---
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -415,6 +418,10 @@ app.get('/api/config', (req, res) => {
     alertBgPulse: ALERT_BG_PULSE,
     alertOverlay: ALERT_OVERLAY,
   });
+});
+
+app.get('/api/version', (req, res) => {
+  res.json({ version: SERVER_START_TIME });
 });
 
 app.get('/api/departures', async (req, res) => {

@@ -1105,6 +1105,23 @@
     }
   }
 
+  // ── Auto-reload on new deployment ──
+  let knownVersion = null;
+
+  async function checkVersion() {
+    try {
+      const res = await fetch('/api/version');
+      const data = await res.json();
+      if (knownVersion === null) {
+        knownVersion = data.version; // capture current version on first load
+      } else if (data.version !== knownVersion) {
+        window.location.reload();   // new deployment — reload to pick up changes
+      }
+    } catch {
+      // network hiccup — ignore, will retry next interval
+    }
+  }
+
   // ── Init ──
   async function init() {
     try {
@@ -1135,6 +1152,7 @@
     setInterval(updateClock, 1000);
     setInterval(renderCountdowns, 1000);
     setInterval(refreshDepartures, 30000);
+    setInterval(checkVersion, 60000);
 
     // Start clock immediately
     updateClock();
