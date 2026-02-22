@@ -31,10 +31,9 @@ export default function UrgencyOverlay({ dep, now, status, vehicleData, mapStyle
           <span className="overlay-badge">{dep.lineRef}</span>
           {dep.stopName || dep.stopId} → {dep.destinationName}
         </div>
-        <div className="overlay-title">LÄHDE KOTOA</div>
         <div className="overlay-countdown">{formatCountdown(leaveIn)}</div>
         <div className="overlay-details">
-          Bussi lähtee klo {formatTime(dep.departureTimeMs)}
+          klo {formatTime(dep.departureTimeMs)}
         </div>
       </div>
     </div>
