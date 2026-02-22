@@ -54,6 +54,8 @@ const stopNameCache = {
 };
 
 let stopLabels = {};
+let homeCoords = null;       // { lat, lon } — geocoded from HOME_ADDRESS
+const stopCoords = {};       // { stopId: { lat, lon } }
 
 // --- Cached data ---
 let cachedDepartures = [];
@@ -134,6 +136,54 @@ function parseDelayISO(durationStr) {
     const ms = (hours * 3600 + minutes * 60 + seconds) * 1000;
     return negative ? -ms : ms;
   } catch { return 0; }
+}
+
+// --- Geocode home address via Nominatim (runs once at startup) ---
+async function geocodeHomeAddress() {
+  if (process.env.HOME_LAT && process.env.HOME_LON) {
+    return { lat: parseFloat(process.env.HOME_LAT), lon: parseFloat(process.env.HOME_LON) };
+  }
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(HOME_ADDRESS)}`;
+    const res = await fetch(url, {
+      timeout: 10000,
+      headers: { 'User-Agent': 'marmorikatu-bus-timetables/1.0 (home-kiosk)' },
+    });
+    const data = await res.json();
+    if (data && data[0]) {
+      console.log(`Geocoded home: ${data[0].lat}, ${data[0].lon}`);
+      return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+    }
+  } catch (err) {
+    console.warn('Home geocoding failed:', err.message);
+  }
+  return null;
+}
+
+// --- Fetch stop coordinates from ITS Factory stop-points API ---
+async function fetchStopCoords(stopId) {
+  if (stopCoords[stopId]) return stopCoords[stopId];
+  try {
+    const url = `${API_BASE}/stop-points/${encodeURIComponent(stopId)}`;
+    const res = await fetch(url, { timeout: 8000 });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const body = Array.isArray(data.body) ? data.body[0] : data.body;
+    if (body && body.location) {
+      const loc = body.location;
+      const lat = parseFloat(loc.latitude ?? loc.lat ?? loc.y);
+      const lon = parseFloat(loc.longitude ?? loc.lon ?? loc.x);
+      if (!isNaN(lat) && !isNaN(lon) && lat !== 0) {
+        stopCoords[stopId] = { lat, lon };
+        console.log(`Stop ${stopId} coords: ${lat}, ${lon}`);
+        return stopCoords[stopId];
+      }
+      console.warn(`Stop ${stopId} unrecognised location format:`, JSON.stringify(loc));
+    }
+  } catch (err) {
+    console.warn(`Stop coords failed for ${stopId}: ${err.message}`);
+  }
+  return null;
 }
 
 // --- Schedule helper functions ---
@@ -424,6 +474,48 @@ app.get('/api/version', (req, res) => {
   res.json({ version: SERVER_START_TIME });
 });
 
+app.get('/api/vehicles', async (req, res) => {
+  try {
+    const vaRes = await fetch(`${API_BASE}/vehicle-activity`, { timeout: 10000 });
+    if (!vaRes.ok) throw new Error(`HTTP ${vaRes.status}`);
+    const vaData = await vaRes.json();
+    const vehicles = vaData.body || [];
+
+    const buses = [];
+    for (const v of vehicles) {
+      const mvj = v.monitoredVehicleJourney || {};
+      const loc = mvj.vehicleLocation;
+      if (!loc) continue;
+      const lat = parseFloat(loc.latitude ?? loc.lat ?? loc.y);
+      const lon = parseFloat(loc.longitude ?? loc.lon ?? loc.x);
+      if (isNaN(lat) || isNaN(lon) || lat === 0) continue;
+
+      const passesOurStop = (mvj.onwardCalls || []).some(call => {
+        const stopRef = (call.stopPointRef || '').split('/').pop();
+        return monitoredStopIds.includes(stopRef);
+      });
+      if (!passesOurStop) continue;
+
+      buses.push({
+        lineRef: mvj.lineRef || '?',
+        lat,
+        lon,
+        bearing: parseFloat(mvj.bearing || 0),
+        destinationName: stopNameCache[mvj.destinationShortName] || mvj.destinationShortName || '',
+      });
+    }
+
+    const stops = monitoredStopIds
+      .filter(id => stopCoords[id])
+      .map(id => ({ id, name: stopLabels[id] || stopNameCache[id] || id, ...stopCoords[id] }));
+
+    res.json({ home: homeCoords, stops, buses });
+  } catch (err) {
+    console.error('vehicles error:', err.message);
+    res.status(503).json({ error: err.message, home: homeCoords, stops: [], buses: [] });
+  }
+});
+
 app.get('/api/departures', async (req, res) => {
   try {
     const departures = await fetchDepartures();
@@ -454,6 +546,10 @@ app.get('/api/departures', async (req, res) => {
 
   // Build schedule cache after server is up (provides scheduled departures not yet in real-time system)
   buildScheduleCache().catch(err => console.warn('Initial schedule cache build failed:', err.message));
+
+  // Geocode home address and fetch stop coordinates in the background
+  geocodeHomeAddress().then(coords => { homeCoords = coords; }).catch(() => {});
+  Promise.all(monitoredStopIds.map(id => fetchStopCoords(id))).catch(() => {});
 
   // Refresh schedule cache at 05:00 local time daily
   setInterval(async function() {

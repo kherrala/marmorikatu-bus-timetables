@@ -643,7 +643,59 @@
       color: rgba(255,255,255,0.25);
     }
     #urgencyOverlay { cursor: pointer; }
+    /* ── Mini-map ── */
+    .card-with-map {
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+    .card-with-map .next-bus-card {
+      border-radius: 0;
+      margin-bottom: 0;
+    }
+    #mapContainer {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+      background: var(--nysse-mid);
+    }
+    #miniMap {
+      height: 170px;
+      width: 100%;
+    }
+    .bus-marker {
+      background: var(--nysse-blue);
+      color: #fff;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 0.7rem;
+      border: 2px solid #fff;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+      white-space: nowrap;
+    }
+    .home-marker {
+      background: var(--nysse-blue);
+      border-radius: 50%;
+      width: 14px;
+      height: 14px;
+      border: 3px solid #fff;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    }
+    .stop-marker {
+      background: var(--white);
+      border-radius: 4px;
+      width: 12px;
+      height: 12px;
+      border: 2px solid var(--nysse-blue);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    }
   </style>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 </head>
 <body>
 
@@ -664,10 +716,15 @@
 <main>
   <div class="error-banner" id="errorBanner"></div>
 
-  <!-- Next bus card -->
-  <div class="next-bus-card empty" id="nextBusCard">
-    <div class="next-label">Next departure</div>
-    <div style="margin-top:12px;font-size:1rem;">Ladataan…</div>
+  <!-- Next bus card + mini-map -->
+  <div class="card-with-map">
+    <div class="next-bus-card empty" id="nextBusCard">
+      <div class="next-label">Next departure</div>
+      <div style="margin-top:12px;font-size:1rem;">Ladataan…</div>
+    </div>
+    <div id="mapContainer">
+      <div id="miniMap"></div>
+    </div>
   </div>
 
   <!-- Table -->
@@ -758,6 +815,7 @@
   </div>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
   // ── State ──
   let config = {};
@@ -1105,6 +1163,107 @@
     }
   }
 
+  // ── Mini-map ──
+  let map = null;
+  let mapOpen = false;
+  let homeMarker = null;
+  const stopMarkerMap = {};   // { stopId: L.marker }
+  const busMarkerMap  = {};   // { lineRef: L.marker }
+
+  function ensureMapInit() {
+    if (map) return;
+    map = L.map('miniMap', {
+      zoomControl: false,
+      attributionControl: true,
+      dragging: false,
+      touchZoom: false,
+      scrollWheelZoom: false,
+      doubleClickZoom: false,
+      boxZoom: false,
+      keyboard: false,
+    });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" style="color:#aaa">OSM</a> &copy; <a href="https://carto.com/attributions" style="color:#aaa">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 18,
+    }).addTo(map);
+  }
+
+  function makeIcon(className, size) {
+    return L.divIcon({ html: `<div class="${className}"></div>`, className: '', iconSize: [size, size], iconAnchor: [size/2, size/2] });
+  }
+
+  function makeBusIcon(lineRef) {
+    return L.divIcon({
+      html: `<div class="bus-marker">${escHtml(lineRef)}</div>`,
+      className: '',
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
+    });
+  }
+
+  async function refreshVehicles() {
+    try {
+      const res = await fetch('/api/vehicles');
+      const data = await res.json();
+
+      const hasData = data.home || data.stops.length > 0 || data.buses.length > 0;
+      if (!hasData) return;
+
+      ensureMapInit();
+
+      // Home marker
+      if (data.home && !homeMarker) {
+        homeMarker = L.marker([data.home.lat, data.home.lon], { icon: makeIcon('home-marker', 14) }).addTo(map);
+      }
+
+      // Stop markers
+      for (const stop of (data.stops || [])) {
+        if (!stopMarkerMap[stop.id]) {
+          stopMarkerMap[stop.id] = L.marker([stop.lat, stop.lon], { icon: makeIcon('stop-marker', 12) })
+            .bindTooltip(stop.name, { permanent: false, direction: 'top', className: 'leaflet-tooltip' })
+            .addTo(map);
+        }
+      }
+
+      // Bus markers — update existing, add new, remove gone
+      const seenLines = new Set();
+      for (const bus of (data.buses || [])) {
+        seenLines.add(bus.lineRef);
+        if (busMarkerMap[bus.lineRef]) {
+          busMarkerMap[bus.lineRef].setLatLng([bus.lat, bus.lon]);
+        } else {
+          busMarkerMap[bus.lineRef] = L.marker([bus.lat, bus.lon], { icon: makeBusIcon(bus.lineRef) }).addTo(map);
+        }
+      }
+      for (const key of Object.keys(busMarkerMap)) {
+        if (!seenLines.has(key)) {
+          busMarkerMap[key].remove();
+          delete busMarkerMap[key];
+        }
+      }
+
+      // Fit map to all known points
+      const pts = [];
+      if (data.home) pts.push([data.home.lat, data.home.lon]);
+      for (const s of (data.stops || [])) pts.push([s.lat, s.lon]);
+      for (const b of (data.buses || [])) pts.push([b.lat, b.lon]);
+      if (pts.length > 0) {
+        if (pts.length === 1) map.setView(pts[0], 15);
+        else map.fitBounds(pts, { padding: [24, 24] });
+      }
+
+      // Slide map open on first data
+      if (!mapOpen) {
+        mapOpen = true;
+        document.getElementById('mapContainer').style.maxHeight = '170px';
+        setTimeout(() => { if (map) map.invalidateSize(); }, 750);
+      }
+    } catch (err) {
+      console.warn('Vehicle refresh failed:', err.message);
+    }
+  }
+
   // ── Auto-reload on new deployment ──
   let knownVersion = null;
 
@@ -1130,6 +1289,7 @@
     setInterval(renderCountdowns, 1000);
     setInterval(refreshDepartures, 30000);
     setInterval(checkVersion, 60000);
+    setInterval(refreshVehicles, 15000);
 
     // Fetch config and first departures in parallel
     await Promise.all([
@@ -1153,6 +1313,7 @@
       })(),
       refreshDepartures(),
     ]);
+    refreshVehicles();
   }
 
   init();
