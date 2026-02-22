@@ -24,7 +24,12 @@ if (STOP_WALKING_TIMES_RAW) {
 function walkMsForStop(stopId) {
   return stopWalkMs[stopId] !== undefined ? stopWalkMs[stopId] : WALKING_TIME_MINUTES * 60 * 1000;
 }
-const LOOKAHEAD_MINUTES = parseInt(process.env.LOOKAHEAD_MINUTES || '60', 10);
+const LOOKAHEAD_MINUTES = parseInt(process.env.LOOKAHEAD_MINUTES || '90', 10);
+
+// Alert feature default flags (can be overridden per-device in browser localStorage)
+const ALERT_BAR      = process.env.ALERT_BAR      !== 'false';
+const ALERT_BG_PULSE = process.env.ALERT_BG_PULSE !== 'false';
+const ALERT_OVERLAY  = process.env.ALERT_OVERLAY  !== 'false';
 
 // STOP_IDS: explicit comma-separated list of stop IDs (city-direction).
 // Kaipanen city-direction: 4431, Pitkäniitynkatu city-direction: 4087
@@ -384,6 +389,9 @@ app.get('/api/config', (req, res) => {
     stopIds: monitoredStopIds,
     stopLabels,
     stopWalkingMinutes,
+    alertBar: ALERT_BAR,
+    alertBgPulse: ALERT_BG_PULSE,
+    alertOverlay: ALERT_OVERLAY,
   });
 });
 
