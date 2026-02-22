@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Marmorikatu Bus Timetables</title>
+  <style>
+    :root {
+      --nysse-blue:    #0071C2;
+      --nysse-dark:    #003D7A;
+      --nysse-mid:     #0059A3;
+      --nysse-light:   #E8F4FD;
+      --white:         #FFFFFF;
+      --text-muted:    #B0CFE8;
+      --status-green:  #00C853;
+      --status-yellow: #FFD600;
+      --status-orange: #FF6D00;
+      --status-red:    #DD2C00;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--nysse-dark);
+      color: var(--white);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      padding: 0;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--nysse-blue);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    /* Nysse N logo mark */
+    .nysse-logo {
+      width: 44px;
+      height: 44px;
+      background: var(--white);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .nysse-logo span {
+      font-size: 26px;
+      font-weight: 900;
+      color: var(--nysse-blue);
+      letter-spacing: -2px;
+      font-style: italic;
+    }
+
+    .header-address {
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: var(--white);
+    }
+
+    .header-clock {
+      font-size: 1.6rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 1px;
+    }
+
+    /* ── Sub-header bar ── */
+    .sub-header {
+      background: var(--nysse-mid);
+      padding: 8px 24px;
+      display: flex;
+      gap: 20px;
+      font-size: 0.875rem;
+      color: var(--nysse-light);
+      flex-wrap: wrap;
+    }
+
+    .sub-header span {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .sub-header .dot {
+      opacity: 0.5;
+    }
+
+    /* ── Main content ── */
+    main {
+      padding: 20px 24px;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    /* ── Error banner ── */
+    .error-banner {
+      background: var(--status-red);
+      color: var(--white);
+      border-radius: 8px;
+      padding: 10px 16px;
+      margin-bottom: 16px;
+      font-size: 0.9rem;
+      display: none;
+    }
+
+    .error-banner.visible {
+      display: block;
+    }
+
+    /* ── Next bus card ── */
+    .next-bus-card {
+      background: var(--nysse-mid);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 24px;
+      border-left: 5px solid var(--nysse-blue);
+      transition: border-color 0.3s;
+    }
+
+    .next-bus-card.status-go     { border-color: var(--status-green); }
+    .next-bus-card.status-soon   { border-color: var(--status-yellow); }
+    .next-bus-card.status-urgent { border-color: var(--status-orange); }
+    .next-bus-card.status-late   { border-color: var(--status-red); }
+    .next-bus-card.status-at-stop { border-color: var(--status-green); }
+
+    .next-bus-card.empty {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 1rem;
+      padding: 32px;
+      border-left-color: var(--nysse-blue);
+    }
+
+    .next-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .next-route {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .next-line-badge {
+      background: var(--nysse-blue);
+      color: var(--white);
+      font-size: 1rem;
+      font-weight: 800;
+      padding: 2px 10px;
+      border-radius: 6px;
+      min-width: 38px;
+      text-align: center;
+    }
+
+    .next-departs {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    .next-counters {
+      display: flex;
+      gap: 32px;
+      flex-wrap: wrap;
+    }
+
+    .counter-block {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .counter-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .counter-value {
+      font-size: 2.4rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+      color: var(--white);
+    }
+
+    .counter-value.status-go     { color: var(--status-green); }
+    .counter-value.status-soon   { color: var(--status-yellow); }
+    .counter-value.status-urgent { color: var(--status-orange); }
+    .counter-value.status-late   { color: var(--status-red); }
+    .counter-value.status-at-stop { color: var(--status-green); }
+
+    @keyframes pulse-green {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+
+    .status-at-stop .counter-value {
+      animation: pulse-green 1s ease-in-out infinite;
+    }
+
+    /* ── Table ── */
+    .table-wrap {
+      background: var(--nysse-mid);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+    }
+
+    thead {
+      background: rgba(0, 61, 122, 0.6);
+    }
+
+    thead th {
+      padding: 10px 14px;
+      text-align: left;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    thead th.right { text-align: right; }
+
+    tbody tr {
+      border-top: 1px solid rgba(255,255,255,0.07);
+      transition: background 0.2s;
+    }
+
+    tbody tr:hover {
+      background: rgba(255,255,255,0.05);
+    }
+
+    td {
+      padding: 12px 14px;
+      vertical-align: middle;
+    }
+
+    td.right { text-align: right; }
+
+    .line-badge {
+      display: inline-block;
+      background: var(--nysse-blue);
+      color: var(--white);
+      font-weight: 800;
+      font-size: 0.85rem;
+      padding: 2px 8px;
+      border-radius: 5px;
+      min-width: 32px;
+      text-align: center;
+    }
+
+    .dest-name {
+      color: var(--white);
+    }
+
+    .time-cell {
+      font-variant-numeric: tabular-nums;
+      color: var(--nysse-light);
+    }
+
+    .countdown-cell {
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+    }
+
+    /* Row status colours */
+    .row-status-go     .countdown-cell { color: var(--status-green); }
+    .row-status-soon   .countdown-cell { color: var(--status-yellow); }
+    .row-status-urgent .countdown-cell { color: var(--status-orange); }
+    .row-status-late   .countdown-cell { color: var(--status-red); }
+    .row-status-at-stop .countdown-cell { color: var(--status-green); }
+
+    .delay-badge {
+      font-size: 0.7rem;
+      padding: 1px 5px;
+      border-radius: 4px;
+      margin-left: 4px;
+      font-weight: 600;
+    }
+
+    .delay-late  { background: rgba(221,44,0,0.25); color: #ff7043; }
+    .delay-early { background: rgba(0,200,83,0.2);  color: #69f0ae; }
+    .sched-badge { background: rgba(176,207,232,0.15); color: var(--text-muted); }
+
+    .at-stop-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.7rem;
+      background: rgba(0,200,83,0.2);
+      color: var(--status-green);
+      border-radius: 4px;
+      padding: 1px 6px;
+    }
+
+    .at-stop-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--status-green);
+      animation: pulse-green 1s ease-in-out infinite;
+    }
+
+    .empty-row td {
+      text-align: center;
+      color: var(--text-muted);
+      padding: 32px;
+    }
+
+    /* ── Footer ── */
+    footer {
+      max-width: 860px;
+      margin: 14px auto 0;
+      padding: 0 24px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .refresh-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .refresh-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--status-green);
+      opacity: 0.6;
+    }
+
+    .refresh-dot.fetching {
+      animation: pulse-green 0.6s ease-in-out infinite;
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <div class="nysse-logo"><span>N</span></div>
+    <div class="header-address" id="headerAddress">Marmorikatu 10</div>
+  </div>
+  <div class="header-clock" id="headerClock">--:--:--</div>
+</header>
+
+<div class="sub-header">
+  <span id="stopInfo">Kaipanen · 10 min walk &nbsp;|&nbsp; Pitkäniitynkatu · 13 min walk</span>
+  <span class="dot">·</span>
+  <span id="lookaheadInfo">Next 60 min</span>
+</div>
+
+<main>
+  <div class="error-banner" id="errorBanner"></div>
+
+  <!-- Next bus card -->
+  <div class="next-bus-card empty" id="nextBusCard">
+    <div class="next-label">Next departure</div>
+    <div style="margin-top:12px;font-size:1rem;">Ladataan…</div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Linja</th>
+          <th>Määränpää</th>
+          <th class="right">Lähtö</th>
+          <th class="right">Lähde kotoa</th>
+          <th class="right">Bussi lähtee</th>
+        </tr>
+      </thead>
+      <tbody id="departuresTbody">
+        <tr class="empty-row"><td colspan="5">Ladataan…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<footer>
+  <div class="refresh-indicator">
+    <div class="refresh-dot" id="refreshDot"></div>
+    <span id="updatedLabel">Haetaan…</span>
+  </div>
+  <span>Päivittyy 30 s välein</span>
+</footer>
+
+<script>
+  // ── State ──
+  let config = {};
+  let departures = [];
+  let fetchedAt = null;
+  let isFetching = false;
+
+  // ── Utilities ──
+  function pad2(n) { return String(Math.floor(Math.abs(n))).padStart(2, '0'); }
+
+  function formatTime(ms) {
+    const d = new Date(ms);
+    return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  }
+
+  function formatCountdown(ms) {
+    const neg = ms < 0;
+    const abs = Math.abs(ms);
+    const totalSec = Math.floor(abs / 1000);
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return `${neg ? '-' : ''}${pad2(m)}:${pad2(s)}`;
+  }
+
+  function getStatus(dep, now) {
+    if (dep.vehicleAtStop) return 'at-stop';
+    const leaveIn = dep.leaveByMs - now;
+    if (leaveIn > 5 * 60 * 1000)  return 'go';
+    if (leaveIn > 2 * 60 * 1000)  return 'soon';
+    if (leaveIn >= 0)              return 'urgent';
+    return 'late';
+  }
+
+  // ── Clock ──
+  function updateClock() {
+    const now = new Date();
+    document.getElementById('headerClock').textContent =
+      `${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
+  }
+
+  // ── Render table rows (static HTML; only on data refresh) ──
+  function renderTable() {
+    const tbody = document.getElementById('departuresTbody');
+    if (!departures.length) {
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="5">Ei busseja seuraavaan ${config.lookaheadMinutes || 60} minuuttiin</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = departures.map((dep, i) => {
+      const delaySec = dep.delaySeconds;
+      let delayHtml = '';
+      if (delaySec > 60) {
+        delayHtml = `<span class="delay-badge delay-late">+${Math.round(delaySec/60)}min</span>`;
+      } else if (delaySec < -30) {
+        delayHtml = `<span class="delay-badge delay-early">${Math.round(delaySec/60)}min</span>`;
+      }
+
+      const atStopHtml = dep.vehicleAtStop
+        ? `<span class="at-stop-tag"><span class="at-stop-dot"></span>PYSÄKILLÄ</span>`
+        : '';
+      const schedHtml = dep.source === 'schedule'
+        ? `<span class="delay-badge sched-badge">aikataulu</span>`
+        : '';
+
+      return `
+        <tr id="row-${i}" class="">
+          <td><span class="line-badge">${escHtml(dep.lineRef)}</span></td>
+          <td><span class="dest-name">${escHtml(dep.destinationName)}</span>${delayHtml}${atStopHtml}${schedHtml}</td>
+          <td class="right time-cell">${formatTime(dep.departureTimeMs)}</td>
+          <td class="right time-cell">${formatTime(dep.leaveByMs)}</td>
+          <td class="right countdown-cell" id="cd-${i}">--:--</td>
+        </tr>`;
+    }).join('');
+  }
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ── Render next-bus card ──
+  function renderNextBusCard(dep, now) {
+    const card = document.getElementById('nextBusCard');
+    if (!dep) {
+      card.className = 'next-bus-card empty';
+      card.innerHTML = `
+        <div class="next-label">Seuraava lähtö</div>
+        <div style="margin-top:12px;font-size:1rem;color:var(--text-muted)">Ei busseja seuraavaan ${config.lookaheadMinutes || 60} minuuttiin</div>`;
+      return;
+    }
+
+    const status = getStatus(dep, now);
+    card.className = `next-bus-card status-${status}`;
+
+    const busIn = formatCountdown(dep.departureTimeMs - now);
+    const leaveIn = formatCountdown(dep.leaveByMs - now);
+    const departs = formatTime(dep.departureTimeMs);
+    const leaveBy = formatTime(dep.leaveByMs);
+
+    card.innerHTML = `
+      <div class="next-label">Seuraava lähtö</div>
+      <div class="next-route">
+        <span class="next-line-badge">${escHtml(dep.lineRef)}</span>
+        <span>→ ${escHtml(dep.destinationName)}</span>
+      </div>
+      <div class="next-departs">Lähtee ${departs} &nbsp;·&nbsp; Lähde kotoa ${leaveBy}</div>
+      <div class="next-counters">
+        <div class="counter-block">
+          <div class="counter-label">Bussi lähtee</div>
+          <div class="counter-value" id="nextBusIn">${busIn}</div>
+        </div>
+        <div class="counter-block">
+          <div class="counter-label">Lähde kotoa</div>
+          <div class="counter-value ${status !== 'at-stop' ? 'status-' + status : ''}" id="nextLeaveIn">${leaveIn}</div>
+        </div>
+      </div>`;
+  }
+
+  // ── Live countdowns (every second) ──
+  function renderCountdowns() {
+    const now = Date.now();
+
+    // Update next-bus card counters
+    const firstDep = departures[0];
+    if (firstDep) {
+      const busInEl = document.getElementById('nextBusIn');
+      const leaveInEl = document.getElementById('nextLeaveIn');
+      if (busInEl) busInEl.textContent = formatCountdown(firstDep.departureTimeMs - now);
+      if (leaveInEl) {
+        const ms = firstDep.leaveByMs - now;
+        leaveInEl.textContent = formatCountdown(ms);
+        const status = getStatus(firstDep, now);
+        leaveInEl.className = `counter-value status-${status}`;
+        // Update card border
+        const card = document.getElementById('nextBusCard');
+        card.className = `next-bus-card status-${status}`;
+      }
+    } else {
+      renderNextBusCard(null, now);
+    }
+
+    // Update table rows
+    departures.forEach((dep, i) => {
+      const cdEl = document.getElementById(`cd-${i}`);
+      const rowEl = document.getElementById(`row-${i}`);
+      if (!cdEl || !rowEl) return;
+
+      const status = getStatus(dep, now);
+      cdEl.textContent = formatCountdown(dep.departureTimeMs - now);
+      rowEl.className = `row-status-${status}`;
+    });
+  }
+
+  // ── Fetch departures from API ──
+  async function refreshDepartures() {
+    if (isFetching) return;
+    isFetching = true;
+    document.getElementById('refreshDot').classList.add('fetching');
+
+    try {
+      const res = await fetch('/api/departures');
+      const data = await res.json();
+
+      departures = data.departures || [];
+      fetchedAt = data.fetchedAt || Date.now();
+
+      const errorBanner = document.getElementById('errorBanner');
+      if (!data.ok) {
+        const ago = fetchedAt ? Math.round((Date.now() - fetchedAt) / 60000) : '?';
+        errorBanner.textContent = `API-virhe — näytetään välimuistissa olevat tiedot (${ago} min sitten). Yritetään uudelleen…`;
+        errorBanner.classList.add('visible');
+      } else {
+        errorBanner.classList.remove('visible');
+      }
+
+      renderTable();
+      renderNextBusCard(departures[0], Date.now());
+      document.getElementById('updatedLabel').textContent = `Päivitetty: ${formatTime(fetchedAt)}`;
+    } catch (err) {
+      const errorBanner = document.getElementById('errorBanner');
+      errorBanner.textContent = `Verkkovirhe: ${err.message}. Yritetään 30 s kuluttua…`;
+      errorBanner.classList.add('visible');
+    } finally {
+      isFetching = false;
+      document.getElementById('refreshDot').classList.remove('fetching');
+    }
+  }
+
+  // ── Init ──
+  async function init() {
+    try {
+      const res = await fetch('/api/config');
+      config = await res.json();
+
+      document.getElementById('headerAddress').textContent = config.homeAddress || 'Marmorikatu 10';
+      // Build stop info: "Kaipanen · 10 min · Pitkäniitynkatu · 13 min"
+      if (config.stopLabels && config.stopWalkingMinutes) {
+        const parts = (config.stopIds || []).map(id =>
+          `${config.stopLabels[id] || id} · ${config.stopWalkingMinutes[id] || config.walkingTimeMinutes} min kävelyä`
+        );
+        document.getElementById('stopInfo').textContent = parts.join('  |  ');
+      }
+      document.getElementById('lookaheadInfo').textContent = `Seuraavat ${config.lookaheadMinutes || 60} min`;
+      document.title = `${config.homeAddress || 'Marmorikatu 10'} — Bussit`;
+    } catch (err) {
+      console.warn('Could not load config:', err);
+    }
+
+    // Initial fetch
+    await refreshDepartures();
+
+    // Intervals
+    setInterval(updateClock, 1000);
+    setInterval(renderCountdowns, 1000);
+    setInterval(refreshDepartures, 30000);
+
+    // Start clock immediately
+    updateClock();
+  }
+
+  init();
+</script>
+</body>
+</html>
