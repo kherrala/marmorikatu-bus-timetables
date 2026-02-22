@@ -11,9 +11,11 @@ interface NextBusCardProps {
   bus2: Bus | null;
   mapStyleUrl: string;
   overlayVisible: boolean;
+  onMap1Click?: () => void;
+  onMap2Click?: () => void;
 }
 
-export default function NextBusCard({ dep1, dep2, now, bus1, bus2, mapStyleUrl, overlayVisible }: NextBusCardProps) {
+export default function NextBusCard({ dep1, dep2, now, bus1, bus2, mapStyleUrl, overlayVisible, onMap1Click, onMap2Click }: NextBusCardProps) {
   if (!dep1) {
     return (
       <div className="next-bus-card empty">
@@ -39,6 +41,7 @@ export default function NextBusCard({ dep1, dep2, now, bus1, bus2, mapStyleUrl, 
           bus={bus1}
           mapStyleUrl={mapStyleUrl}
           overlayVisible={overlayVisible}
+          onMapClick={onMap1Click}
         />
         {dep2 && (
           <BusColumn
@@ -50,6 +53,7 @@ export default function NextBusCard({ dep1, dep2, now, bus1, bus2, mapStyleUrl, 
             bus={bus2}
             mapStyleUrl={mapStyleUrl}
             overlayVisible={overlayVisible}
+            onMapClick={onMap2Click}
           />
         )}
       </div>
@@ -66,9 +70,10 @@ interface BusColumnProps {
   bus: Bus | null;
   mapStyleUrl: string;
   overlayVisible: boolean;
+  onMapClick?: () => void;
 }
 
-function BusColumn({ dep, now, status, label, isPrimary, bus, mapStyleUrl, overlayVisible }: BusColumnProps) {
+function BusColumn({ dep, now, status, label, isPrimary, bus, mapStyleUrl, overlayVisible, onMapClick }: BusColumnProps) {
   const leaveInMs = dep.leaveByMs - now;
   const busInMs = dep.departureTimeMs - now;
   const leaveValueClass = status !== 'at-stop'
@@ -99,7 +104,7 @@ function BusColumn({ dep, now, status, label, isPrimary, bus, mapStyleUrl, overl
           </div>
         </div>
       </div>
-      <ColumnMap bus={bus} mapStyleUrl={mapStyleUrl} overlayVisible={overlayVisible} />
+      <ColumnMap bus={bus} mapStyleUrl={mapStyleUrl} overlayVisible={overlayVisible} onMapClick={onMapClick} />
     </div>
   );
 }

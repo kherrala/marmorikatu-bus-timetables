@@ -23,6 +23,7 @@ export default function App() {
   const [alertOverlay, setAlertOverlay] = useState(true);
   const [dismissedDepKey, setDismissedDepKey] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [previewDep, setPreviewDep] = useState<Departure | null>(null);
 
   const knownVersionRef = useRef<number | null>(null);
   const isFetchingRef = useRef(false);
@@ -197,7 +198,9 @@ export default function App() {
           bus1={bus1}
           bus2={bus2}
           mapStyleUrl={mapStyleUrl}
-          overlayVisible={overlayVisible}
+          overlayVisible={overlayVisible || previewDep !== null}
+          onMap1Click={dep1 ? () => setPreviewDep(dep1) : undefined}
+          onMap2Click={dep2 ? () => setPreviewDep(dep2) : undefined}
         />
 
         <DepartureTable
@@ -238,14 +241,18 @@ export default function App() {
         onAlertOverlayChange={handleAlertOverlayChange}
       />
 
-      {overlayVisible && dep1 && (
+      {(overlayVisible || previewDep) && (
         <UrgencyOverlay
-          dep={dep1}
+          dep={overlayVisible ? dep1! : previewDep!}
           now={now}
           status={status1}
           vehicleData={vehicleData}
           mapStyleUrl={mapStyleUrl}
-          onDismiss={() => setDismissedDepKey(getDepKey(dep1))}
+          isPreview={!overlayVisible}
+          onDismiss={() => {
+            if (previewDep && !overlayVisible) { setPreviewDep(null); }
+            else { setDismissedDepKey(getDepKey(dep1)); }
+          }}
         />
       )}
     </>

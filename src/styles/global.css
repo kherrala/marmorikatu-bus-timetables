@@ -177,6 +177,13 @@ main {
   display: flex;
   align-items: center;
   gap: 10px;
+  overflow: hidden;
+}
+
+.next-route span:last-child {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .next-line-badge {
@@ -571,6 +578,9 @@ body.state-late   { animation: pulse-bg-late   0.6s ease-in-out infinite; }
   box-sizing: border-box;
   cursor: pointer;
 }
+
+/* No flashing border or background when opened manually via minimap tap */
+.urgency-overlay.preview::before { display: none; }
 
 /* animated border ring — above map, below text */
 .urgency-overlay::before {

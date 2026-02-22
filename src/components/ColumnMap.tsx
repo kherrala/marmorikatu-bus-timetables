@@ -6,6 +6,7 @@ interface ColumnMapProps {
   bus: Bus | null;
   mapStyleUrl: string;
   overlayVisible: boolean;
+  onMapClick?: () => void;
 }
 
 function makeBusEl(lineRef: string, bearing: number): HTMLElement {
@@ -22,7 +23,7 @@ function makeBusEl(lineRef: string, bearing: number): HTMLElement {
   return wrap;
 }
 
-export default function ColumnMap({ bus, mapStyleUrl, overlayVisible }: ColumnMapProps) {
+export default function ColumnMap({ bus, mapStyleUrl, overlayVisible, onMapClick }: ColumnMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
@@ -100,7 +101,14 @@ export default function ColumnMap({ bus, mapStyleUrl, overlayVisible }: ColumnMa
         transition: overlayVisible ? 'none' : undefined,
       }}
     >
-      <div ref={containerRef} style={{ height: '130px' }} />
+      <div ref={containerRef} style={{ height: '130px', position: 'relative' }}>
+        {onMapClick && (
+          <div
+            style={{ position: 'absolute', inset: 0, zIndex: 10, cursor: 'pointer' }}
+            onClick={e => { e.stopPropagation(); onMapClick(); }}
+          />
+        )}
+      </div>
     </div>
   );
 }

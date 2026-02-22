@@ -10,14 +10,19 @@ interface UrgencyOverlayProps {
   vehicleData: VehicleData;
   mapStyleUrl: string;
   onDismiss: () => void;
+  isPreview?: boolean;
 }
 
-export default function UrgencyOverlay({ dep, now, status, vehicleData, mapStyleUrl, onDismiss }: UrgencyOverlayProps) {
+export default function UrgencyOverlay({ dep, now, status, vehicleData, mapStyleUrl, onDismiss, isPreview }: UrgencyOverlayProps) {
   const leaveIn = dep.leaveByMs - now;
+
+  let overlayClass = 'urgency-overlay';
+  if (isPreview) overlayClass += ' preview';
+  else if (status === 'late') overlayClass += ' state-late';
 
   return (
     <div
-      className={`urgency-overlay${status === 'late' ? ' state-late' : ''}`}
+      className={overlayClass}
       onClick={onDismiss}
     >
       <OverlayMap dep={dep} vehicleData={vehicleData} mapStyleUrl={mapStyleUrl} />
