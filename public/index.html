@@ -886,8 +886,7 @@
         <tr id="row-${i}" class="">
           <td><span class="line-badge">${escHtml(dep.lineRef)}</span></td>
           <td>
-            <span class="dest-name">${escHtml(dep.destinationName)}</span>${delayHtml}${atStopHtml}${schedHtml}
-            <div><span class="stop-tag">${escHtml(dep.stopName || dep.stopId)}</span></div>
+            <span class="dest-name">${escHtml(dep.stopName || dep.stopId)} → ${escHtml(dep.destinationName)}</span>${delayHtml}${atStopHtml}${schedHtml}
           </td>
           <td class="right time-cell">${formatTime(dep.departureTimeMs)}</td>
           <td class="right time-cell">${formatTime(dep.leaveByMs)}</td>
@@ -921,12 +920,9 @@
         <div class="next-label">${labelText}</div>
         <div class="next-route">
           <span class="next-line-badge">${escHtml(dep.lineRef)}</span>
-          <span>→ ${escHtml(dep.destinationName)}</span>
+          <span>${escHtml(dep.stopName || dep.stopId)} → ${escHtml(dep.destinationName)}</span>
         </div>
-        <div class="next-departs">
-          <span class="stop-tag">${escHtml(dep.stopName || dep.stopId)}</span>
-          &nbsp;Lähtee ${departs} &nbsp;·&nbsp; Lähde kotoa ${leaveBy}
-        </div>
+        <div class="next-departs">Lähtee ${departs} &nbsp;·&nbsp; Lähde kotoa ${leaveBy}</div>
         <div class="next-counters">
           <div class="counter-block">
             <div class="counter-label">Bussi lähtee</div>
