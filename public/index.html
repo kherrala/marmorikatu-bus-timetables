@@ -158,6 +158,8 @@
 
     .next-col {
       padding-right: 24px;
+      display: flex;
+      flex-direction: column;
     }
 
     .next-col.secondary {
@@ -652,12 +654,27 @@
       max-height: 0;
       overflow: hidden;
       transition: max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-      margin-top: 14px;
+      margin-top: auto;   /* aligns to bottom of the flex column */
+      padding-top: 14px;
       border-radius: 8px;
     }
     .col-map-container > div {
       height: 130px;
       width: 100%;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    /* Hide column maps while urgency overlay is active */
+    body.overlay-visible .col-map-container {
+      max-height: 0 !important;
+      padding-top: 0;
+      transition: none;
+    }
+
+    /* Prevent map container from blinking with the urgent column */
+    .next-bus-card.status-urgent .next-col.primary .col-map-container {
+      animation: none;
     }
 
     /* ── Overlay background map ── */
@@ -667,7 +684,7 @@
       z-index: 0;
       overflow: hidden;
       pointer-events: none;
-      opacity: 0.45; /* dim so text stays readable */
+      opacity: 0.65;
     }
     #overlayMap {
       width: 100%;
@@ -706,7 +723,7 @@
       box-shadow: 0 1px 4px rgba(0,0,0,0.4);
     }
   </style>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
 </head>
 <body>
 
@@ -864,7 +881,7 @@
   </div>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script>
   // ── State ──
   let config = {};
@@ -1162,10 +1179,12 @@
     document.getElementById('overlayDetails').innerHTML =
       `Bussi lähtee klo ${formatTime(dep1.departureTimeMs)}<br>${escHtml(dep1.stopName || dep1.stopId || '')}`;
     // Initialise overlay map on first show
+    document.body.classList.add('overlay-visible');
     if (wasHidden) ensureOverlayMap();
   } else {
     overlay.style.display = 'none';
     overlay.className = '';
+    document.body.classList.remove('overlay-visible');
     overlayMapReady = false; // reset so map re-inits if overlay re-opens
   }
 
@@ -1215,82 +1234,82 @@
     }
   }
 
-  // ── Maps ──
-  let colMap1 = null;        // Leaflet map in primary column
-  let colMap2 = null;        // Leaflet map in secondary column
-  let overlayMap = null;     // Leaflet map in urgency overlay
-  const markers1 = {};       // { home, 'stop_ID', bus } for colMap1
-  const markers2 = {};       // { home, 'stop_ID', bus } for colMap2
-  const overlayMarkers = {}; // markers for overlay map
-  let dep1LineRef = null;    // lineRef shown in primary column
-  let dep2LineRef = null;    // lineRef shown in secondary column
+  // ── Maps (MapLibre GL vector tiles) ──
+  let colMap1 = null;
+  let colMap2 = null;
+  let overlayMap = null;
+  const markers1 = {};
+  const markers2 = {};
+  const overlayMarkers = {};
+  let dep1LineRef = null;
+  let dep2LineRef = null;
   let dep1StopId  = null;
   let dep2StopId  = null;
   let lastVehicleData = null;
   let overlayMapReady = false;
 
-  function makeIcon(className, size) {
-    return L.divIcon({ html: `<div class="${className}"></div>`, className: '', iconSize: [size, size], iconAnchor: [size/2, size/2] });
+  function glStyle() {
+    return config.mapStyleUrl || 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
   }
 
-  function makeBusIcon(lineRef) {
-    return L.divIcon({
-      html: `<div class="bus-marker">${escHtml(lineRef)}</div>`,
-      className: '',
-      iconSize: [32, 32],
-      iconAnchor: [16, 16],
+  function makeEl(className) {
+    const el = document.createElement('div');
+    el.className = className;
+    return el;
+  }
+
+  function createGLMap(elementId) {
+    const m = new maplibregl.Map({
+      container: elementId,
+      style: glStyle(),
+      center: [23.91, 61.46],
+      zoom: 13,
+      attributionControl: false,
     });
-  }
-
-  function tileLayer(m) {
-    const url = config.mapTileUrl || 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png';
-    const opts = {
-      maxZoom: 18,
-      attribution: config.mapTileAttribution || '',
-    };
-    if (config.mapTileSubdomains) opts.subdomains = config.mapTileSubdomains;
-    return L.tileLayer(url, opts).addTo(m);
-  }
-
-  function createColMap(elementId) {
-    const m = L.map(elementId, {
-      zoomControl: false, attributionControl: false,
-      dragging: false, touchZoom: false, scrollWheelZoom: false,
-      doubleClickZoom: false, boxZoom: false, keyboard: false,
-    });
-    tileLayer(m);
+    ['dragPan','scrollZoom','boxZoom','dragRotate','keyboard','doubleClickZoom','touchZoomRotate']
+      .forEach(c => m[c] && m[c].disable());
     return m;
   }
 
   function syncMarkers(m, store, data, bus) {
     if (data.home && !store.home) {
-      store.home = L.marker([data.home.lat, data.home.lon], { icon: makeIcon('home-marker', 14) }).addTo(m);
+      store.home = new maplibregl.Marker({ element: makeEl('home-marker'), anchor: 'center' })
+        .setLngLat([data.home.lon, data.home.lat]).addTo(m);
     }
     for (const stop of (data.stops || [])) {
       const k = 'stop_' + stop.id;
       if (!store[k]) {
-        store[k] = L.marker([stop.lat, stop.lon], { icon: makeIcon('stop-marker', 12) })
-          .bindTooltip(stop.name, { permanent: false, direction: 'top' })
-          .addTo(m);
+        store[k] = new maplibregl.Marker({ element: makeEl('stop-marker'), anchor: 'center' })
+          .setLngLat([stop.lon, stop.lat]).addTo(m);
       }
     }
     if (bus) {
-      if (store.bus) { store.bus.setLatLng([bus.lat, bus.lon]); store.bus.setIcon(makeBusIcon(bus.lineRef)); }
-      else           { store.bus = L.marker([bus.lat, bus.lon], { icon: makeBusIcon(bus.lineRef) }).addTo(m); }
+      if (store.bus) {
+        store.bus.setLngLat([bus.lon, bus.lat]);
+        store.bus.getElement().textContent = bus.lineRef;
+      } else {
+        const el = makeEl('bus-marker');
+        el.textContent = bus.lineRef;
+        store.bus = new maplibregl.Marker({ element: el, anchor: 'center' })
+          .setLngLat([bus.lon, bus.lat]).addTo(m);
+      }
     } else if (store.bus) {
       store.bus.remove(); delete store.bus;
     }
   }
 
-  function fitMap(m, data, bus, stopId) {
+  function fitGLMap(m, data, bus, stopId) {
     const pts = [];
-    if (bus) pts.push([bus.lat, bus.lon]);
+    if (bus) pts.push([bus.lon, bus.lat]);
     const stop = (data.stops || []).find(s => s.id === stopId);
-    if (stop)                pts.push([stop.lat, stop.lon]);
-    else for (const s of (data.stops || [])) pts.push([s.lat, s.lon]);
-    if (pts.length === 0 && data.home) pts.push([data.home.lat, data.home.lon]);
-    if (pts.length === 1) m.setView(pts[0], bus ? 15 : 14);
-    else if (pts.length > 1) m.fitBounds(pts, { padding: [24, 24] });
+    if (stop) pts.push([stop.lon, stop.lat]);
+    else for (const s of (data.stops || [])) pts.push([s.lon, s.lat]);
+    if (pts.length === 0 && data.home) pts.push([data.home.lon, data.home.lat]);
+    if (pts.length === 0) return;
+    if (pts.length === 1) { m.setCenter(pts[0]); m.setZoom(bus ? 15 : 14); return; }
+    const bounds = new maplibregl.LngLatBounds();
+    for (const pt of pts) bounds.extend(pt);
+    m.fitBounds(bounds, { padding: 28, maxZoom: 16, animate: false });
   }
 
   async function openColMap(colNum, data, bus, stopId) {
@@ -1301,45 +1320,44 @@
 
     if (!isOpen) {
       containerEl.style.maxHeight = '130px';
-      // Wait for CSS transition before initialising Leaflet (avoids blank tiles)
+      // Wait for CSS transition to complete before creating GL context
       await new Promise(r => setTimeout(r, 650));
-      if (colNum === 1 && !colMap1) colMap1 = createColMap(mapId);
-      if (colNum === 2 && !colMap2) colMap2 = createColMap(mapId);
+      if (colNum === 1 && !colMap1) colMap1 = createGLMap(mapId);
+      if (colNum === 2 && !colMap2) colMap2 = createGLMap(mapId);
     }
     const m = colNum === 1 ? colMap1 : colMap2;
     if (!m) return;
-    m.invalidateSize();
-    syncMarkers(m, store, data, bus);
-    fitMap(m, data, bus, stopId);
+    m.resize();
+    const doUpdate = () => { syncMarkers(m, store, data, bus); fitGLMap(m, data, bus, stopId); };
+    m.isStyleLoaded() ? doUpdate() : m.once('load', doUpdate);
   }
 
   function syncOverlayMap(data, dep) {
     if (!overlayMap) return;
     const bus = dep ? (data.buses || []).find(b => b.lineRef === dep.lineRef) : null;
-    syncMarkers(overlayMap, overlayMarkers, data, bus);
-    // Fit to home + stop + bus
-    const pts = [];
-    if (data.home) pts.push([data.home.lat, data.home.lon]);
-    const stop = (data.stops || []).find(s => s.id === (dep && dep.stopId));
-    if (stop) pts.push([stop.lat, stop.lon]);
-    else for (const s of (data.stops || [])) pts.push([s.lat, s.lon]);
-    if (bus) pts.push([bus.lat, bus.lon]);
-    if (pts.length === 1) overlayMap.setView(pts[0], 15);
-    else if (pts.length > 1) overlayMap.fitBounds(pts, { padding: [60, 60] });
+    const doUpdate = () => {
+      syncMarkers(overlayMap, overlayMarkers, data, bus);
+      const pts = [];
+      if (data.home) pts.push([data.home.lon, data.home.lat]);
+      const stop = (data.stops || []).find(s => s.id === (dep && dep.stopId));
+      if (stop) pts.push([stop.lon, stop.lat]);
+      else for (const s of (data.stops || [])) pts.push([s.lon, s.lat]);
+      if (bus) pts.push([bus.lon, bus.lat]);
+      if (pts.length > 0) {
+        const bounds = new maplibregl.LngLatBounds();
+        for (const pt of pts) bounds.extend(pt);
+        overlayMap.fitBounds(bounds, { padding: 70, maxZoom: 15, animate: false });
+      }
+    };
+    overlayMap.isStyleLoaded() ? doUpdate() : overlayMap.once('load', doUpdate);
   }
 
   function ensureOverlayMap() {
     if (overlayMapReady) return;
     overlayMapReady = true;
-    // Give the overlay a frame to render before initialising Leaflet
     requestAnimationFrame(() => {
-      overlayMap = L.map('overlayMap', {
-        zoomControl: false, attributionControl: false,
-        dragging: false, touchZoom: false, scrollWheelZoom: false,
-        doubleClickZoom: false, boxZoom: false, keyboard: false,
-      });
-      tileLayer(overlayMap);
-      overlayMap.invalidateSize();
+      overlayMap = createGLMap('overlayMap');
+      overlayMap.resize();
       if (lastVehicleData && currentPrimaryDep) syncOverlayMap(lastVehicleData, currentPrimaryDep);
     });
   }
@@ -1362,9 +1380,7 @@
       if (dep1) openColMap(1, data, bus1, dep1.stopId);
       if (dep2) openColMap(2, data, bus2, dep2.stopId);
 
-      // Keep overlay map in sync if visible
-      const overlayEl = document.getElementById('urgencyOverlay');
-      if (overlayEl.style.display !== 'none' && overlayMap) {
+      if (overlayMap && document.getElementById('urgencyOverlay').style.display !== 'none') {
         syncOverlayMap(data, dep1);
       }
     } catch (err) {

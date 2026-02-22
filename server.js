@@ -31,14 +31,13 @@ const ALERT_BAR      = process.env.ALERT_BAR      !== 'false';
 const ALERT_BG_PULSE = process.env.ALERT_BG_PULSE !== 'false';
 const ALERT_OVERLAY  = process.env.ALERT_OVERLAY  !== 'false';
 
-// Map tiles: if MML_API_KEY is set, proxy MML taustakartta tiles; otherwise use CartoDB dark
+// Map style (Mapbox GL / MapLibre GL vector tiles)
+// MML_API_KEY: free key from maanmittauslaitos.fi → uses Finnish taustakartta vector tiles
+// Otherwise falls back to CartoDB dark-matter (free, no key required)
 const MML_API_KEY = process.env.MML_API_KEY || '';
-const MAP_TILE_URL = MML_API_KEY
-  ? '/api/tiles/{z}/{y}/{x}'
-  : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png';
-const MAP_TILE_ATTRIBUTION = MML_API_KEY
-  ? '&copy; <a href="https://www.maanmittauslaitos.fi">Maanmittauslaitos</a>'
-  : '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+const MAP_STYLE_URL = MML_API_KEY
+  ? `https://avoin-karttakuva.maanmittauslaitos.fi/avoin/vectortiles/taustakartta/v20/style-taustakartta.json?api-key=${MML_API_KEY}`
+  : 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
 // STOP_IDS: explicit comma-separated list of stop IDs (city-direction).
 // Kaipanen city-direction: 4431, Pitkäniitynkatu city-direction: 4087
@@ -504,25 +503,6 @@ app.use((req, res, next) => {
 // --- Routes ---
 app.use(express.static(path.join(__dirname, 'public')));
 
-// MML tile proxy — keeps API key server-side
-if (MML_API_KEY) {
-  app.get('/api/tiles/:z/:y/:x', async (req, res) => {
-    const { z, y, x } = req.params;
-    const url = `https://avoin-karttakuva.maanmittauslaitos.fi/avoin/wmts/1.0.0/taustakartta/default/WGS84_Pseudo-Mercator/${z}/${y}/${x}.png?api-key=${MML_API_KEY}`;
-    try {
-      const tileRes = await fetch(url, { timeout: 10000 });
-      if (!tileRes.ok) { res.status(tileRes.status).end(); return; }
-      const buf = await tileRes.buffer();
-      res.set('Content-Type', 'image/png');
-      res.set('Cache-Control', 'public, max-age=86400');
-      res.send(buf);
-    } catch (err) {
-      console.warn('Tile proxy error:', err.message);
-      res.status(502).end();
-    }
-  });
-}
-
 app.get('/api/config', (req, res) => {
   // Build per-stop walking minutes map for the frontend
   const stopWalkingMinutes = {};
@@ -539,9 +519,7 @@ app.get('/api/config', (req, res) => {
     alertBar: ALERT_BAR,
     alertBgPulse: ALERT_BG_PULSE,
     alertOverlay: ALERT_OVERLAY,
-    mapTileUrl: MAP_TILE_URL,
-    mapTileAttribution: MAP_TILE_ATTRIBUTION,
-    mapTileSubdomains: MML_API_KEY ? '' : 'abcd',
+    mapStyleUrl: MAP_STYLE_URL,
   });
 });
 
