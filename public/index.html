@@ -711,6 +711,7 @@
       position: absolute;
       inset: 0;
       transform-origin: center center;
+      z-index: 2; /* above .bus-marker (z-index: 1) so arrow is always visible */
     }
     .bus-arrow::after {
       content: '';
@@ -1385,10 +1386,12 @@
 
     if (!isOpen) {
       containerEl.style.maxHeight = '130px';
-      // Wait for CSS transition to complete before creating GL context
-      await new Promise(r => setTimeout(r, 650));
+      // Create the GL map immediately so tiles/sprites/glyphs load during the
+      // CSS transition rather than after it — cuts perceived startup delay.
       if (colNum === 1 && !colMap1) colMap1 = createGLMap(mapId);
       if (colNum === 2 && !colMap2) colMap2 = createGLMap(mapId);
+      // Still wait for the transition before calling resize()
+      await new Promise(r => setTimeout(r, 650));
     }
     const m = colNum === 1 ? colMap1 : colMap2;
     if (!m) return;
