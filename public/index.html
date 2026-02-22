@@ -1050,7 +1050,7 @@
     overlay.style.display = 'flex';
     overlay.className = 'state-' + status1;
     document.getElementById('overlayRoute').innerHTML =
-      `<span class="overlay-badge">${escHtml(dep1.lineRef)}</span>→ ${escHtml(dep1.destinationName)}`;
+      `<span class="overlay-badge">${escHtml(dep1.lineRef)}</span>${escHtml(dep1.stopName || dep1.stopId)} → ${escHtml(dep1.destinationName)}`;
     document.getElementById('overlayCountdown').textContent = formatCountdown(dep1.leaveByMs - now);
     document.getElementById('overlayDetails').innerHTML =
       `Bussi lähtee klo ${formatTime(dep1.departureTimeMs)}<br>${escHtml(dep1.stopName || dep1.stopId || '')}`;
