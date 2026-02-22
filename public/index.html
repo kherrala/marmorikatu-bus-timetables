@@ -565,7 +565,7 @@
       align-items: center;
       justify-content: center;
       padding: 24px;
-      background: rgba(4, 12, 28, 0.97);
+      background: rgba(4, 12, 28, 0.3);
       box-sizing: border-box;
     }
     #urgencyOverlay:not([style*="none"]) { display: flex; }
@@ -598,6 +598,13 @@
       z-index: 1;
       text-align: center;
       width: 100%;
+      max-width: 480px;
+      background: rgba(4, 12, 28, 0.82);
+      border-radius: 20px;
+      padding: 32px 40px;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      box-shadow: 0 8px 40px rgba(0,0,0,0.5);
     }
     #overlayRoute {
       font-size: 1.35rem;
@@ -633,7 +640,7 @@
       color: var(--status-orange);
       margin-bottom: 20px;
       letter-spacing: -2px;
-      text-shadow: 0 2px 16px rgba(0,0,0,0.9);
+      text-shadow: 0 2px 16px rgba(0,0,0,0.6);
     }
     #urgencyOverlay.state-late #overlayCountdown { color: var(--status-red); }
     #overlayDetails {
@@ -646,7 +653,7 @@
       font-size: 0.72rem;
       letter-spacing: 2px;
       text-transform: uppercase;
-      color: rgba(255,255,255,0.25);
+      color: rgba(255,255,255,0.35);
     }
     #urgencyOverlay { cursor: pointer; }
     /* ── Column maps (one per departure column) ── */
@@ -684,7 +691,6 @@
       z-index: 0;
       overflow: hidden;
       pointer-events: none;
-      opacity: 0.65;
     }
     #overlayMap {
       width: 100%;
@@ -1271,6 +1277,7 @@
     return m;
   }
 
+  // Sync full set of markers (home + stops + bus) — used for the overlay map
   function syncMarkers(m, store, data, bus) {
     if (data.home && !store.home) {
       store.home = new maplibregl.Marker({ element: makeEl('home-marker'), anchor: 'center' })
@@ -1298,18 +1305,23 @@
     }
   }
 
-  function fitGLMap(m, data, bus, stopId) {
-    const pts = [];
-    if (bus) pts.push([bus.lon, bus.lat]);
-    const stop = (data.stops || []).find(s => s.id === stopId);
-    if (stop) pts.push([stop.lon, stop.lat]);
-    else for (const s of (data.stops || [])) pts.push([s.lon, s.lat]);
-    if (pts.length === 0 && data.home) pts.push([data.home.lon, data.home.lat]);
-    if (pts.length === 0) return;
-    if (pts.length === 1) { m.setCenter(pts[0]); m.setZoom(bus ? 15 : 14); return; }
-    const bounds = new maplibregl.LngLatBounds();
-    for (const pt of pts) bounds.extend(pt);
-    m.fitBounds(bounds, { padding: 28, maxZoom: 16, animate: false });
+  // Sync only the bus marker — used for column mini-maps (bus-focused, no clutter)
+  function syncBusMarker(m, store, bus) {
+    if (bus) {
+      if (store.bus) {
+        store.bus.setLngLat([bus.lon, bus.lat]);
+        store.bus.getElement().textContent = bus.lineRef;
+      } else {
+        const el = makeEl('bus-marker');
+        el.textContent = bus.lineRef;
+        store.bus = new maplibregl.Marker({ element: el, anchor: 'center' })
+          .setLngLat([bus.lon, bus.lat]).addTo(m);
+      }
+      m.setCenter([bus.lon, bus.lat]);
+      m.setZoom(15);
+    } else if (store.bus) {
+      store.bus.remove(); delete store.bus;
+    }
   }
 
   async function openColMap(colNum, data, bus, stopId) {
@@ -1328,7 +1340,8 @@
     const m = colNum === 1 ? colMap1 : colMap2;
     if (!m) return;
     m.resize();
-    const doUpdate = () => { syncMarkers(m, store, data, bus); fitGLMap(m, data, bus, stopId); };
+    // Column maps: show only the bus, zoomed in tight
+    const doUpdate = () => syncBusMarker(m, store, bus);
     m.isStyleLoaded() ? doUpdate() : m.once('load', doUpdate);
   }
 
@@ -1346,7 +1359,13 @@
       if (pts.length > 0) {
         const bounds = new maplibregl.LngLatBounds();
         for (const pt of pts) bounds.extend(pt);
-        overlayMap.fitBounds(bounds, { padding: 70, maxZoom: 15, animate: false });
+        // Large bottom padding pushes the markers into the upper portion of the screen,
+        // clear of the centred text card below.
+        overlayMap.fitBounds(bounds, {
+          padding: { top: 60, right: 60, bottom: 320, left: 60 },
+          maxZoom: 15,
+          animate: false,
+        });
       }
     };
     overlayMap.isStyleLoaded() ? doUpdate() : overlayMap.once('load', doUpdate);
