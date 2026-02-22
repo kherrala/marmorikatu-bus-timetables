@@ -49,7 +49,7 @@ async function getMmlStyle(serverBase) {
   if (mmlStyleCache && mmlStyleCacheBase === serverBase && Date.now() - mmlStyleCacheTime < 3600 * 1000) {
     return mmlStyleCache;
   }
-  const url = `${MML_ORIGIN}/vectortiles/stylejson/v20/taustakartta.json?api-key=${MML_API_KEY}`;
+  const url = `${MML_ORIGIN}/vectortiles/stylejson/v20/backgroundmap.json?api-key=${MML_API_KEY}`;
   const res = await fetch(url, { timeout: 15000 });
   if (!res.ok) throw new Error(`MML style HTTP ${res.status}`);
   let styleText = await res.text();

@@ -116,7 +116,7 @@ export default function OverlayMap({ dep, vehicleData, mapStyleUrl }: OverlayMap
         const bounds = new maplibregl.LngLatBounds();
         for (const pt of pts) bounds.extend(pt);
         map.fitBounds(bounds, {
-          padding: { top: 60, right: 60, bottom: 320, left: 60 },
+          padding: { top: 400, right: 60, bottom: 60, left: 60 },
           maxZoom: 15,
           animate: false,
         });

@@ -143,7 +143,7 @@ export default function App() {
   const status1 = dep1 ? getStatus(dep1, now) : 'go';
   const isSnoozed = dep1 !== null && dismissedDepKey === getDepKey(dep1);
   const isUrgentBg = status1 === 'urgent' || status1 === 'late';
-  const overlayVisible = alertOverlay && dep1 !== null && (dep1.leaveByMs - now) < 2 * 60 * 1000 && !isSnoozed;
+  const overlayVisible = alertOverlay && dep1 !== null && (dep1.leaveByMs - now) < 2 * 60 * 1000 && dep1.leaveByMs > now && !isSnoozed;
 
   useEffect(() => {
     const classes: string[] = [];

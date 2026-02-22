@@ -564,9 +564,9 @@ body.state-late   { animation: pulse-bg-late   0.6s ease-in-out infinite; }
   inset: 0;
   z-index: 200;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: 24px;
+  padding: 10vh 24px 24px;
   background: rgba(4, 12, 28, 0.3);
   box-sizing: border-box;
   cursor: pointer;
@@ -647,7 +647,6 @@ body.state-late   { animation: pulse-bg-late   0.6s ease-in-out infinite; }
   color: var(--status-orange);
   margin-bottom: 20px;
   letter-spacing: -2px;
-  text-shadow: 0 2px 16px rgba(0,0,0,0.6);
 }
 
 .urgency-overlay.state-late .overlay-countdown { color: var(--status-red); }
