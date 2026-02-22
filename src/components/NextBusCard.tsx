@@ -13,9 +13,11 @@ interface NextBusCardProps {
   overlayVisible: boolean;
   onMap1Click?: () => void;
   onMap2Click?: () => void;
+  onDep1Click?: () => void;
+  onDep2Click?: () => void;
 }
 
-export default function NextBusCard({ dep1, dep2, now, bus1, bus2, mapStyleUrl, overlayVisible, onMap1Click, onMap2Click }: NextBusCardProps) {
+export default function NextBusCard({ dep1, dep2, now, bus1, bus2, mapStyleUrl, overlayVisible, onMap1Click, onMap2Click, onDep1Click, onDep2Click }: NextBusCardProps) {
   if (!dep1) {
     return (
       <div className="next-bus-card empty">
@@ -42,6 +44,7 @@ export default function NextBusCard({ dep1, dep2, now, bus1, bus2, mapStyleUrl, 
           mapStyleUrl={mapStyleUrl}
           overlayVisible={overlayVisible}
           onMapClick={onMap1Click}
+          onDepClick={onDep1Click}
         />
         {dep2 && (
           <BusColumn
@@ -54,6 +57,7 @@ export default function NextBusCard({ dep1, dep2, now, bus1, bus2, mapStyleUrl, 
             mapStyleUrl={mapStyleUrl}
             overlayVisible={overlayVisible}
             onMapClick={onMap2Click}
+            onDepClick={onDep2Click}
           />
         )}
       </div>
@@ -71,9 +75,10 @@ interface BusColumnProps {
   mapStyleUrl: string;
   overlayVisible: boolean;
   onMapClick?: () => void;
+  onDepClick?: () => void;
 }
 
-function BusColumn({ dep, now, status, label, isPrimary, bus, mapStyleUrl, overlayVisible, onMapClick }: BusColumnProps) {
+function BusColumn({ dep, now, status, label, isPrimary, bus, mapStyleUrl, overlayVisible, onMapClick, onDepClick }: BusColumnProps) {
   const leaveInMs = dep.leaveByMs - now;
   const busInMs = dep.departureTimeMs - now;
   const leaveValueClass = status !== 'at-stop'
@@ -83,7 +88,10 @@ function BusColumn({ dep, now, status, label, isPrimary, bus, mapStyleUrl, overl
   return (
     <div className={`next-col ${isPrimary ? 'primary' : 'secondary'}`}>
       <div className="next-label">{label}</div>
-      <div className="next-route">
+      <div
+        className={`next-route${onDepClick ? ' next-route-clickable' : ''}`}
+        onClick={onDepClick}
+      >
         <span className="next-line-badge">{dep.lineRef}</span>
         <span>{dep.stopName || dep.stopId} → {dep.destinationName}</span>
       </div>

@@ -761,3 +761,139 @@ body.state-late   { animation: pulse-bg-late   0.6s ease-in-out infinite; }
   border: 2px solid var(--nysse-blue);
   box-shadow: 0 1px 4px rgba(0,0,0,0.4);
 }
+
+/* ── Clickable departure route row ── */
+.next-route-clickable {
+  cursor: pointer;
+}
+.next-route-clickable:hover {
+  opacity: 0.8;
+}
+
+/* ── Journey panel (city-centre arrival times) ── */
+.journey-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: flex-end;
+}
+
+.journey-panel {
+  width: 100%;
+  max-height: 70vh;
+  background: var(--nysse-mid);
+  border-radius: 16px 16px 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
+}
+
+.journey-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 16px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+  flex-shrink: 0;
+}
+
+.journey-badge {
+  background: var(--nysse-blue);
+  color: var(--white);
+  font-size: 0.9rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.journey-title {
+  font-size: 1rem;
+  font-weight: 700;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.journey-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  flex-shrink: 0;
+}
+.journey-close:hover {
+  color: var(--white);
+}
+
+.journey-subtitle {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  padding: 8px 16px 4px;
+  flex-shrink: 0;
+}
+
+.journey-stops {
+  overflow-y: auto;
+  flex: 1;
+  padding: 4px 0 12px;
+}
+
+.journey-loading,
+.journey-no-data {
+  padding: 24px 16px;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.journey-stop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+
+.journey-stop-terminal {
+  background: rgba(0, 113, 194, 0.25);
+}
+
+.journey-stop-name {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.journey-stop-time {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.journey-delay {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--status-orange);
+  background: rgba(255, 109, 0, 0.15);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.journey-early {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--status-green);
+  background: rgba(0, 200, 83, 0.15);
+  padding: 1px 5px;
+  border-radius: 4px;
+}

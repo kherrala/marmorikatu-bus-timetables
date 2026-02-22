@@ -666,6 +666,71 @@ app.get('/api/version', (req, res) => {
   res.json({ version: SERVER_START_TIME });
 });
 
+// City-centre stop IDs in inbound route order (Hämeenpuisto → Keskustori terminus)
+const CITY_STOP_IDS = ['0005', '0004', '0003', '0002', '0001'];
+
+app.get('/api/onward-calls', async (req, res) => {
+  const { lineRef, depTime } = req.query;
+  if (!lineRef || !depTime) {
+    return res.status(400).json({ error: 'lineRef and depTime required' });
+  }
+  const depTimeMs = parseInt(depTime, 10);
+  const MATCH_TOLERANCE_MS = 15 * 60 * 1000;
+
+  try {
+    const vehicles = await getVehicleData();
+
+    // Find the vehicle for this trip: same lineRef, dep time at our stop within tolerance
+    let matchedVehicle = null;
+    let bestDelta = Infinity;
+
+    for (const v of vehicles) {
+      const mvj = v.monitoredVehicleJourney || {};
+      if (mvj.lineRef !== lineRef) continue;
+      for (const call of (mvj.onwardCalls || [])) {
+        const stopRef = (call.stopPointRef || '').split('/').pop();
+        if (!monitoredStopIds.includes(stopRef)) continue;
+        const t = call.expectedDepartureTime || call.expectedArrivalTime
+                || call.aimedDepartureTime   || call.aimedArrivalTime;
+        if (!t) break;
+        const delta = Math.abs(new Date(t).getTime() - depTimeMs);
+        if (delta < MATCH_TOLERANCE_MS && delta < bestDelta) {
+          bestDelta = delta;
+          matchedVehicle = v;
+        }
+        break; // only first matching stop per vehicle
+      }
+    }
+
+    if (!matchedVehicle) {
+      return res.json({ found: false, stops: [] });
+    }
+
+    const mvj = matchedVehicle.monitoredVehicleJourney || {};
+    const stops = [];
+    for (const call of (mvj.onwardCalls || [])) {
+      const stopId = (call.stopPointRef || '').split('/').pop();
+      if (!CITY_STOP_IDS.includes(stopId)) continue;
+      const aimedT    = call.aimedArrivalTime    || call.aimedDepartureTime;
+      const expectedT = call.expectedArrivalTime || call.expectedDepartureTime || aimedT;
+      stops.push({
+        id: stopId,
+        name: stopNameCache[stopId] || stopId,
+        aimedTimeMs:    aimedT    ? new Date(aimedT).getTime()    : null,
+        expectedTimeMs: expectedT ? new Date(expectedT).getTime() : null,
+      });
+    }
+
+    // Return stops in inbound route order
+    stops.sort((a, b) => CITY_STOP_IDS.indexOf(a.id) - CITY_STOP_IDS.indexOf(b.id));
+
+    res.json({ found: true, stops });
+  } catch (err) {
+    console.error('onward-calls error:', err.message);
+    res.status(503).json({ found: false, stops: [], error: err.message });
+  }
+});
+
 app.get('/api/vehicles', async (req, res) => {
   try {
     const vehicles = await getVehicleData();

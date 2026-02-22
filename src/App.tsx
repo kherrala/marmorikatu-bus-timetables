@@ -7,6 +7,7 @@ import DepartureTable from './components/DepartureTable';
 import UrgencyBar from './components/UrgencyBar';
 import UrgencyOverlay from './components/UrgencyOverlay';
 import SettingsPanel from './components/SettingsPanel';
+import JourneyPanel from './components/JourneyPanel';
 
 const CARTO_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
@@ -24,6 +25,7 @@ export default function App() {
   const [dismissedDepKey, setDismissedDepKey] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [previewDep, setPreviewDep] = useState<Departure | null>(null);
+  const [journeyDep, setJourneyDep] = useState<Departure | null>(null);
 
   const knownVersionRef = useRef<number | null>(null);
   const isFetchingRef = useRef(false);
@@ -201,6 +203,8 @@ export default function App() {
           overlayVisible={overlayVisible || previewDep !== null}
           onMap1Click={dep1 ? () => setPreviewDep(dep1) : undefined}
           onMap2Click={dep2 ? () => setPreviewDep(dep2) : undefined}
+          onDep1Click={dep1 ? () => setJourneyDep(dep1) : undefined}
+          onDep2Click={dep2 ? () => setJourneyDep(dep2) : undefined}
         />
 
         <DepartureTable
@@ -240,6 +244,10 @@ export default function App() {
         onAlertBgPulseChange={handleAlertBgPulseChange}
         onAlertOverlayChange={handleAlertOverlayChange}
       />
+
+      {journeyDep && (
+        <JourneyPanel dep={journeyDep} onClose={() => setJourneyDep(null)} />
+      )}
 
       {(overlayVisible || previewDep) && (
         <UrgencyOverlay

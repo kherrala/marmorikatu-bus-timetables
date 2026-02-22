@@ -40,3 +40,10 @@ export interface VehicleData {
 }
 
 export type Status = 'go' | 'soon' | 'urgent' | 'late' | 'at-stop';
+
+export interface OnwardStop {
+  id: string;
+  name: string;
+  aimedTimeMs: number | null;
+  expectedTimeMs: number | null;
+}
