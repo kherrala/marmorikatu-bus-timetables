@@ -21,6 +21,7 @@ export interface Departure {
   stopId: string;
   stopName: string;
   source: 'realtime' | 'schedule';
+  arrivalTimeMs?: number | null;
 }
 
 export interface Bus {

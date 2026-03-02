@@ -16,15 +16,14 @@ export default function DepartureTable({ departures, now, lookaheadMinutes }: De
           <tr>
             <th>Linja</th>
             <th>Määränpää</th>
-            <th className="right">Lähtö</th>
+            <th className="right">Perillä</th>
             <th className="right">Lähde kotoa</th>
-            <th className="right">Bussi lähtee</th>
           </tr>
         </thead>
         <tbody>
           {departures.length === 0 ? (
             <tr className="empty-row">
-              <td colSpan={5}>Ei busseja seuraavaan {lookaheadMinutes} minuuttiin</td>
+              <td colSpan={4}>Ei busseja seuraavaan {lookaheadMinutes} minuuttiin</td>
             </tr>
           ) : (
             departures.map((dep, i) => <DepartureRow key={i} dep={dep} now={now} />)
@@ -37,6 +36,7 @@ export default function DepartureTable({ departures, now, lookaheadMinutes }: De
 
 function DepartureRow({ dep, now }: { dep: Departure; now: number }) {
   const status = getStatus(dep, now);
+  const leaveInMs = dep.leaveByMs - now;
 
   let delayEl: React.ReactNode = null;
   if (dep.delaySeconds > 60) {
@@ -63,9 +63,10 @@ function DepartureRow({ dep, now }: { dep: Departure; now: number }) {
         <span className="dest-name">{dep.stopName || dep.stopId} → {dep.destinationName}</span>
         {delayEl}{atStopEl}{schedEl}
       </td>
-      <td className="right time-cell">{formatTime(dep.departureTimeMs)}</td>
-      <td className="right time-cell">{formatTime(dep.leaveByMs)}</td>
-      <td className="right countdown-cell">{formatCountdown(dep.departureTimeMs - now)}</td>
+      <td className="right time-cell">
+        {dep.arrivalTimeMs ? formatTime(dep.arrivalTimeMs) : '—'}
+      </td>
+      <td className="right countdown-cell">{formatCountdown(leaveInMs)}</td>
     </tr>
   );
 }

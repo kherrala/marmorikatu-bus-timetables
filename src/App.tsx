@@ -139,7 +139,7 @@ export default function App() {
   const ARRIVAL_STOP_IDS = ['0519', '0569'];
   useEffect(() => {
     const fetchArrivals = async (dep: Departure | null, setter: (v: OnwardStop[]) => void) => {
-      if (!dep || dep.source === 'schedule') { setter([]); return; }
+      if (!dep) { setter([]); return; }
       try {
         const params = new URLSearchParams({ lineRef: dep.lineRef, depTime: String(dep.departureTimeMs) });
         const res = await fetch(`/api/onward-calls?${params}`);

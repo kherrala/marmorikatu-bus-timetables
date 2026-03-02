@@ -530,6 +530,59 @@ async function fetchDepartures() {
       lastSeen.set(d.lineRef, { resultIdx, departureTimeMs: d.departureTimeMs, leaveByMs: d.leaveByMs });
     }
   }
+
+  // 6. Enrich each departure with Koskipuisto D (0519) arrival time
+  const ARRIVAL_STOP_ID = '0519';
+  const vehicles = await getVehicleData();
+  for (const d of result) {
+    let arrivalTimeMs = null;
+
+    // Try real-time: find matching vehicle by lineRef + departure time at monitored stop
+    for (const v of vehicles) {
+      const mvj = v.monitoredVehicleJourney || {};
+      if (mvj.lineRef !== d.lineRef) continue;
+      let timeMatch = false;
+      for (const call of (mvj.onwardCalls || [])) {
+        const ref = (call.stopPointRef || '').split('/').pop();
+        if (ref === d.stopId) {
+          const t = call.expectedDepartureTime || call.expectedArrivalTime
+                  || call.aimedDepartureTime || call.aimedArrivalTime;
+          if (t && Math.abs(new Date(t).getTime() - d.departureTimeMs) < 10 * 60 * 1000) {
+            timeMatch = true;
+          }
+          break;
+        }
+      }
+      if (!timeMatch) continue;
+      for (const call of (mvj.onwardCalls || [])) {
+        const ref = (call.stopPointRef || '').split('/').pop();
+        if (ref === ARRIVAL_STOP_ID) {
+          const t = call.expectedArrivalTime || call.expectedDepartureTime
+                  || call.aimedArrivalTime || call.aimedDepartureTime;
+          if (t) arrivalTimeMs = new Date(t).getTime();
+          break;
+        }
+      }
+      if (arrivalTimeMs) break;
+    }
+
+    // Fallback: schedule cache
+    if (!arrivalTimeMs) {
+      for (const entries of Object.values(scheduleCache)) {
+        for (const e of entries) {
+          if (e.lineRef !== d.lineRef) continue;
+          if (Math.abs(e.departureTimeMs - d.departureTimeMs) > 10 * 60 * 1000) continue;
+          const stop = (e.onwardStops || []).find(s => s.id === ARRIVAL_STOP_ID);
+          if (stop) arrivalTimeMs = stop.aimedTimeMs;
+          break;
+        }
+        if (arrivalTimeMs) break;
+      }
+    }
+
+    d.arrivalTimeMs = arrivalTimeMs;
+  }
+
   return result;
 }
 
