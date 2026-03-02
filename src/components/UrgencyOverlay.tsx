@@ -1,5 +1,5 @@
 import React from 'react';
-import { Departure, VehicleData, Status } from '../types';
+import { Departure, VehicleData, Status, OnwardStop } from '../types';
 import { formatTime, formatCountdown } from '../utils';
 import OverlayMap from './OverlayMap';
 
@@ -9,11 +9,12 @@ interface UrgencyOverlayProps {
   status: Status;
   vehicleData: VehicleData;
   mapStyleUrl: string;
+  arrivals: OnwardStop[];
   onDismiss: () => void;
   isPreview?: boolean;
 }
 
-export default function UrgencyOverlay({ dep, now, status, vehicleData, mapStyleUrl, onDismiss, isPreview }: UrgencyOverlayProps) {
+export default function UrgencyOverlay({ dep, now, status, vehicleData, mapStyleUrl, arrivals, onDismiss, isPreview }: UrgencyOverlayProps) {
   const leaveIn = dep.leaveByMs - now;
 
   let overlayClass = 'urgency-overlay';
@@ -35,6 +36,16 @@ export default function UrgencyOverlay({ dep, now, status, vehicleData, mapStyle
         <div className="overlay-details">
           klo {formatTime(dep.departureTimeMs)}
         </div>
+        {arrivals.length > 0 && (
+          <div className="overlay-arrivals">
+            {arrivals.map((s, i) => (
+              <React.Fragment key={s.id}>
+                {i > 0 && <span className="arrival-sep">&middot;</span>}
+                <span>{s.name} {formatTime(s.expectedTimeMs ?? s.aimedTimeMs ?? 0)}</span>
+              </React.Fragment>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Departure, Bus, Status } from '../types';
+import { Departure, Bus, Status, OnwardStop } from '../types';
 import { formatTime, formatCountdown, getStatus } from '../utils';
 import ColumnMap from './ColumnMap';
 
@@ -9,6 +9,8 @@ interface NextBusCardProps {
   now: number;
   bus1: Bus | null;
   bus2: Bus | null;
+  arrivals1: OnwardStop[];
+  arrivals2: OnwardStop[];
   mapStyleUrl: string;
   overlayVisible: boolean;
   onMap1Click?: () => void;
@@ -17,7 +19,7 @@ interface NextBusCardProps {
   onDep2Click?: () => void;
 }
 
-export default function NextBusCard({ dep1, dep2, now, bus1, bus2, mapStyleUrl, overlayVisible, onMap1Click, onMap2Click, onDep1Click, onDep2Click }: NextBusCardProps) {
+export default function NextBusCard({ dep1, dep2, now, bus1, bus2, arrivals1, arrivals2, mapStyleUrl, overlayVisible, onMap1Click, onMap2Click, onDep1Click, onDep2Click }: NextBusCardProps) {
   if (!dep1) {
     return (
       <div className="next-bus-card empty">
@@ -41,6 +43,7 @@ export default function NextBusCard({ dep1, dep2, now, bus1, bus2, mapStyleUrl, 
           label="Seuraava"
           isPrimary
           bus={bus1}
+          arrivals={arrivals1}
           mapStyleUrl={mapStyleUrl}
           overlayVisible={overlayVisible}
           onMapClick={onMap1Click}
@@ -54,6 +57,7 @@ export default function NextBusCard({ dep1, dep2, now, bus1, bus2, mapStyleUrl, 
             label="Sen jälkeen"
             isPrimary={false}
             bus={bus2}
+            arrivals={arrivals2}
             mapStyleUrl={mapStyleUrl}
             overlayVisible={overlayVisible}
             onMapClick={onMap2Click}
@@ -72,13 +76,14 @@ interface BusColumnProps {
   label: string;
   isPrimary: boolean;
   bus: Bus | null;
+  arrivals: OnwardStop[];
   mapStyleUrl: string;
   overlayVisible: boolean;
   onMapClick?: () => void;
   onDepClick?: () => void;
 }
 
-function BusColumn({ dep, now, status, label, isPrimary, bus, mapStyleUrl, overlayVisible, onMapClick, onDepClick }: BusColumnProps) {
+function BusColumn({ dep, now, status, label, isPrimary, bus, arrivals, mapStyleUrl, overlayVisible, onMapClick, onDepClick }: BusColumnProps) {
   const leaveInMs = dep.leaveByMs - now;
   const busInMs = dep.departureTimeMs - now;
   const leaveValueClass = status !== 'at-stop'
@@ -112,6 +117,16 @@ function BusColumn({ dep, now, status, label, isPrimary, bus, mapStyleUrl, overl
           </div>
         </div>
       </div>
+      {arrivals.length > 0 && (
+        <div className="arrival-row">
+          {arrivals.map((s, i) => (
+            <React.Fragment key={s.id}>
+              {i > 0 && <span className="arrival-sep">&middot;</span>}
+              <span>{s.name} {formatTime(s.expectedTimeMs ?? s.aimedTimeMs ?? 0)}</span>
+            </React.Fragment>
+          ))}
+        </div>
+      )}
       <ColumnMap bus={bus} mapStyleUrl={mapStyleUrl} overlayVisible={overlayVisible} onMapClick={onMapClick} />
     </div>
   );

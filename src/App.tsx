@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Config, Departure, VehicleData, Bus } from './types';
+import { Config, Departure, VehicleData, Bus, OnwardStop } from './types';
 import { getDepKey, getStatus, findCatchableDep, formatTime } from './utils';
 import Header from './components/Header';
 import NextBusCard from './components/NextBusCard';
@@ -25,6 +25,8 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [previewDep, setPreviewDep] = useState<Departure | null>(null);
   const [journeyDep, setJourneyDep] = useState<Departure | null>(null);
+  const [arrivals1, setArrivals1] = useState<OnwardStop[]>([]);
+  const [arrivals2, setArrivals2] = useState<OnwardStop[]>([]);
 
   const knownVersionRef = useRef<number | null>(null);
   const isFetchingRef = useRef(false);
@@ -110,6 +112,31 @@ export default function App() {
     return () => clearInterval(id);
   }, []);
 
+  // City-centre arrival times for dep1 & dep2 — 15 s refresh
+  const ARRIVAL_STOP_IDS = ['0519', '0569'];
+  useEffect(() => {
+    const fetchArrivals = async (dep: Departure | null, setter: (v: OnwardStop[]) => void) => {
+      if (!dep || dep.source === 'schedule') { setter([]); return; }
+      try {
+        const params = new URLSearchParams({ lineRef: dep.lineRef, depTime: String(dep.departureTimeMs) });
+        const res = await fetch(`/api/onward-calls?${params}`);
+        const data = await res.json();
+        if (data.found) {
+          setter((data.stops || []).filter((s: OnwardStop) => ARRIVAL_STOP_IDS.includes(s.id)));
+        } else {
+          setter([]);
+        }
+      } catch { setter([]); }
+    };
+    fetchArrivals(dep1, setArrivals1);
+    fetchArrivals(dep2, setArrivals2);
+    const id = setInterval(() => {
+      fetchArrivals(dep1, setArrivals1);
+      fetchArrivals(dep2, setArrivals2);
+    }, 15_000);
+    return () => clearInterval(id);
+  }, [dep1?.lineRef, dep1?.departureTimeMs, dep2?.lineRef, dep2?.departureTimeMs]);
+
   // ── Derived state ──
   const primaryIdx = findCatchableDep(departures, now);
   const targetIdx = primaryIdx >= 0 ? primaryIdx : (departures.length > 0 ? 0 : -1);
@@ -189,6 +216,8 @@ export default function App() {
           now={now}
           bus1={bus1}
           bus2={bus2}
+          arrivals1={arrivals1}
+          arrivals2={arrivals2}
           mapStyleUrl={mapStyleUrl}
           overlayVisible={overlayVisible || previewDep !== null}
           onMap1Click={dep1 ? () => setPreviewDep(dep1) : undefined}
@@ -244,6 +273,7 @@ export default function App() {
           status={status1}
           vehicleData={vehicleData}
           mapStyleUrl={mapStyleUrl}
+          arrivals={overlayVisible ? arrivals1 : (previewDep === dep1 ? arrivals1 : arrivals2)}
           isPreview={!overlayVisible}
           onDismiss={() => {
             if (previewDep && !overlayVisible) { setPreviewDep(null); }

@@ -76,13 +76,9 @@ let monitoredStopIds = ['4431', '4087'];
 
 // Pre-seeded stop name cache
 const stopNameCache = {
-  '0001': 'Keskustori M',
-  '0002': 'Keskustori',
-  '0003': 'Koskipuisto',
-  '0004': 'Pyynikintori',
-  '0005': 'Hämeenpuisto',
-  '1668': 'Haukiluoma / Tesoma',
-  '4045': 'Nokianvirta',
+  '0519': 'Koskipuisto D',
+  '0569': 'Sorin aukio C',
+  '0051': 'Keskustori D',
   '4431': 'Kaipanen',
   '4430': 'Kaipanen',
   '4087': 'Pitkäniitynkatu',
@@ -325,11 +321,32 @@ async function buildScheduleCache() {
         const departureTimeMs = extendedTimeToMs(call.departureTime || call.arrivalTime, serviceDate);
         if (isNaN(departureTimeMs)) continue;
         const lineRef = j.lineUrl ? j.lineUrl.split('/').pop() : '?';
+
+        // Extract city-centre stop arrival times from the full journey
+        const cityStops = [];
+        for (const c of (j.calls || [])) {
+          const cId = c.stopPoint && c.stopPoint.shortName;
+          if (cId && CITY_STOP_IDS.includes(cId)) {
+            const arrMs = extendedTimeToMs(c.arrivalTime || c.departureTime, serviceDate);
+            if (!isNaN(arrMs)) {
+              cityStops.push({
+                id: cId,
+                name: stopNameCache[cId] || cId,
+                aimedTimeMs: arrMs,
+                expectedTimeMs: null,
+              });
+            }
+          }
+        }
+        // Sort in route order
+        cityStops.sort((a, b) => CITY_STOP_IDS.indexOf(a.id) - CITY_STOP_IDS.indexOf(b.id));
+
         entries.push({
           lineRef,
           headSign: j.headSign || '',
           departureTimeMs,
           source: 'schedule',
+          cityStops,
         });
       }
 
@@ -665,7 +682,7 @@ app.get('/api/version', (req, res) => {
 });
 
 // City-centre stop IDs in inbound route order (Hämeenpuisto → Keskustori terminus)
-const CITY_STOP_IDS = ['0005', '0004', '0003', '0002', '0001'];
+const CITY_STOP_IDS = ['0519', '0569', '0005', '0004', '0003', '0002', '0001'];
 
 app.get('/api/onward-calls', async (req, res) => {
   const { lineRef, depTime } = req.query;
@@ -685,6 +702,9 @@ app.get('/api/onward-calls', async (req, res) => {
     for (const v of vehicles) {
       const mvj = v.monitoredVehicleJourney || {};
       if (mvj.lineRef !== lineRef) continue;
+
+      // Primary: match by monitored stop in onwardCalls
+      let matched = false;
       for (const call of (mvj.onwardCalls || [])) {
         const stopRef = (call.stopPointRef || '').split('/').pop();
         if (!monitoredStopIds.includes(stopRef)) continue;
@@ -695,12 +715,44 @@ app.get('/api/onward-calls', async (req, res) => {
         if (delta < MATCH_TOLERANCE_MS && delta < bestDelta) {
           bestDelta = delta;
           matchedVehicle = v;
+          matched = true;
         }
-        break; // only first matching stop per vehicle
+        break;
+      }
+
+      // Fallback: bus already passed our stop — match by first city-centre stop time.
+      // Estimate our stop was ~15 min before the first city stop.
+      if (!matched) {
+        for (const call of (mvj.onwardCalls || [])) {
+          const stopRef = (call.stopPointRef || '').split('/').pop();
+          if (!CITY_STOP_IDS.includes(stopRef)) continue;
+          const t = call.expectedArrivalTime || call.expectedDepartureTime
+                  || call.aimedArrivalTime   || call.aimedDepartureTime;
+          if (!t) break;
+          const cityTimeMs = new Date(t).getTime();
+          // Rough estimate: departure at monitored stop was ~15 min before city arrival
+          const estimatedDepMs = cityTimeMs - 15 * 60 * 1000;
+          const delta = Math.abs(estimatedDepMs - depTimeMs);
+          if (delta < MATCH_TOLERANCE_MS && delta < bestDelta) {
+            bestDelta = delta;
+            matchedVehicle = v;
+          }
+          break;
+        }
       }
     }
 
+    // Schedule fallback: if no real-time vehicle found, use schedule cache
     if (!matchedVehicle) {
+      for (const entries of Object.values(scheduleCache)) {
+        for (const e of entries) {
+          if (e.lineRef !== lineRef) continue;
+          if (Math.abs(e.departureTimeMs - depTimeMs) > MATCH_TOLERANCE_MS) continue;
+          if (e.cityStops && e.cityStops.length > 0) {
+            return res.json({ found: true, stops: e.cityStops, source: 'schedule' });
+          }
+        }
+      }
       return res.json({ found: false, stops: [] });
     }
 

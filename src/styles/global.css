@@ -657,6 +657,32 @@ footer {
   color: rgba(255,255,255,0.35);
 }
 
+/* ── Arrival times row (city-centre stops) ── */
+.arrival-row {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.arrival-sep {
+  opacity: 0.4;
+}
+
+.overlay-arrivals {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 /* ── Column maps (one per departure column) ── */
 .col-map-container {
   max-height: 0;
