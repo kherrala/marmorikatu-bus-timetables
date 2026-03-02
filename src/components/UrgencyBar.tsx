@@ -16,9 +16,9 @@ export default function UrgencyBar({ dep1, now, visible }: UrgencyBarProps) {
   let colorClass = '';
 
   if (dep1) {
-    const walkMs = dep1.departureTimeMs - dep1.leaveByMs;
+    const DRAIN_MS = 30 * 60 * 1000; // 30-minute visible drain range
     const remaining = dep1.leaveByMs - now;
-    pct = walkMs > 0 ? Math.max(0, Math.min(100, (remaining / walkMs) * 100)) : 0;
+    pct = Math.max(0, Math.min(100, (remaining / DRAIN_MS) * 100));
     if (pct < 5) colorClass = 'bar-red';
     else if (pct < 20) colorClass = 'bar-orange';
     else if (pct < 50) colorClass = 'bar-yellow';
