@@ -112,6 +112,29 @@ export default function App() {
     return () => clearInterval(id);
   }, []);
 
+  // ── Derived state ──
+  const primaryIdx = findCatchableDep(departures, now);
+  const targetIdx = primaryIdx >= 0 ? primaryIdx : (departures.length > 0 ? 0 : -1);
+  const secondaryIdx = targetIdx >= 0 && targetIdx + 1 < departures.length ? targetIdx + 1 : -1;
+  const dep1 = targetIdx >= 0 ? departures[targetIdx] : null;
+  const dep2 = secondaryIdx >= 0 ? departures[secondaryIdx] : null;
+
+  // Match a bus to a departure by lineRef, picking the closest trip time when multiple buses active
+  const findBus = (dep: Departure | null): Bus | null => {
+    if (!dep) return null;
+    const byLine = vehicleData.buses.filter(b => b.lineRef === dep.lineRef);
+    if (!byLine.length) return null;
+    if (byLine.length === 1) return byLine[0];
+    return [...byLine].sort(
+      (a, b) =>
+        Math.abs((a.depTimeAtStop || 0) - dep.departureTimeMs) -
+        Math.abs((b.depTimeAtStop || 0) - dep.departureTimeMs),
+    )[0];
+  };
+
+  const bus1 = findBus(dep1);
+  const bus2 = findBus(dep2);
+
   // City-centre arrival times for dep1 & dep2 — 15 s refresh
   const ARRIVAL_STOP_IDS = ['0519', '0569'];
   useEffect(() => {
@@ -136,29 +159,6 @@ export default function App() {
     }, 15_000);
     return () => clearInterval(id);
   }, [dep1?.lineRef, dep1?.departureTimeMs, dep2?.lineRef, dep2?.departureTimeMs]);
-
-  // ── Derived state ──
-  const primaryIdx = findCatchableDep(departures, now);
-  const targetIdx = primaryIdx >= 0 ? primaryIdx : (departures.length > 0 ? 0 : -1);
-  const secondaryIdx = targetIdx >= 0 && targetIdx + 1 < departures.length ? targetIdx + 1 : -1;
-  const dep1 = targetIdx >= 0 ? departures[targetIdx] : null;
-  const dep2 = secondaryIdx >= 0 ? departures[secondaryIdx] : null;
-
-  // Match a bus to a departure by lineRef, picking the closest trip time when multiple buses active
-  const findBus = (dep: Departure | null): Bus | null => {
-    if (!dep) return null;
-    const byLine = vehicleData.buses.filter(b => b.lineRef === dep.lineRef);
-    if (!byLine.length) return null;
-    if (byLine.length === 1) return byLine[0];
-    return [...byLine].sort(
-      (a, b) =>
-        Math.abs((a.depTimeAtStop || 0) - dep.departureTimeMs) -
-        Math.abs((b.depTimeAtStop || 0) - dep.departureTimeMs),
-    )[0];
-  };
-
-  const bus1 = findBus(dep1);
-  const bus2 = findBus(dep2);
 
   // Auto-clear snooze when the featured departure changes to a different one
   useEffect(() => {
