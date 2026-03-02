@@ -80,6 +80,11 @@ export default function ColumnMap({ bus, mapStyleUrl, overlayVisible, onMapClick
       }
       map.resize();
       map.easeTo({ center: [bus.lon, bus.lat], zoom: 14, duration: 1200, essential: true });
+      // Re-center after container CSS transition completes (expands from maxHeight: 0)
+      setTimeout(() => {
+        map.resize();
+        map.jumpTo({ center: [bus.lon, bus.lat], zoom: 14 });
+      }, 600);
     };
 
     if (map.isStyleLoaded()) {
@@ -96,12 +101,12 @@ export default function ColumnMap({ bus, mapStyleUrl, overlayVisible, onMapClick
     <div
       className="col-map-container"
       style={{
-        maxHeight: isVisible ? '144px' : '0',
+        maxHeight: isVisible ? '180px' : '0',
         paddingTop: isVisible ? undefined : '0',
         transition: overlayVisible ? 'none' : undefined,
       }}
     >
-      <div ref={containerRef} style={{ height: '130px', position: 'relative' }}>
+      <div ref={containerRef} style={{ position: 'relative' }}>
         {onMapClick && (
           <div
             style={{ position: 'absolute', inset: 0, zIndex: 10, cursor: 'pointer' }}
