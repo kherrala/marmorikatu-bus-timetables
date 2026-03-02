@@ -44,7 +44,7 @@ export default function ColumnMap({ bus, mapStyleUrl, overlayVisible, onMapClick
     ).forEach(c => (map as unknown as Record<string, { disable?: () => void }>)[c]?.disable?.());
     mapRef.current = map;
     return () => {
-      map.remove();
+      try { map.remove(); } catch { /* style still loading */ }
       mapRef.current = null;
       markerRef.current = null;
     };

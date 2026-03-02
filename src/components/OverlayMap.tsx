@@ -48,7 +48,7 @@ export default function OverlayMap({ dep, vehicleData, mapStyleUrl }: OverlayMap
     ).forEach(c => (map as unknown as Record<string, { disable?: () => void }>)[c]?.disable?.());
     mapRef.current = map;
     return () => {
-      map.remove();
+      try { map.remove(); } catch { /* style still loading */ }
       mapRef.current = null;
       storeRef.current = {};
     };
