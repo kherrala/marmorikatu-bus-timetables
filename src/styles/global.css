@@ -624,13 +624,29 @@ footer {
   text-align: center;
   width: 100%;
   max-width: 560px;
-  background: rgba(4, 12, 28, 0.25);
+  background: linear-gradient(180deg, rgba(0, 28, 65, 0.95) 0%, rgba(0, 18, 45, 0.97) 100%);
+  border: 1px solid rgba(255,255,255,0.08);
   border-radius: 22px;
-  padding: 24px 32px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  box-shadow: 0 8px 40px rgba(0,0,0,0.35);
+  padding: 28px 36px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 12px 48px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
+  overflow: hidden;
 }
+
+/* Status accent strip at top of card */
+.overlay-inner::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--status-orange);
+  border-radius: 22px 22px 0 0;
+}
+.urgency-overlay.state-late .overlay-inner::before { background: var(--status-red); }
+.urgency-overlay.preview .overlay-inner::before { background: var(--nysse-blue); }
 
 .overlay-route {
   font-size: 1.3rem;
@@ -667,15 +683,24 @@ footer {
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   line-height: 1;
-  color: var(--status-orange);
+  color: var(--white);
   margin-bottom: 14px;
   letter-spacing: -2px;
+  text-shadow: 0 0 30px rgba(255, 109, 0, 0.5), 0 0 60px rgba(255, 109, 0, 0.2);
 }
 
-.urgency-overlay.state-late .overlay-countdown { color: var(--status-red); }
+.urgency-overlay.state-late .overlay-countdown {
+  color: var(--white);
+  text-shadow: 0 0 30px rgba(221, 44, 0, 0.6), 0 0 60px rgba(221, 44, 0, 0.25);
+}
+
+.urgency-overlay.preview .overlay-countdown {
+  color: var(--white);
+  text-shadow: none;
+}
 
 .overlay-details {
-  color: var(--text-muted);
+  color: var(--nysse-light);
   font-size: 1.15rem;
   line-height: 1.8;
   font-weight: 500;
@@ -811,12 +836,19 @@ footer {
   box-shadow: 0 1px 5px rgba(0,0,0,0.4);
 }
 
-/* ── Clickable departure route row ── */
+/* ── Clickable rows ── */
 .next-route-clickable {
   cursor: pointer;
 }
 .next-route-clickable:hover {
   opacity: 0.8;
+}
+
+.row-clickable {
+  cursor: pointer;
+}
+.row-clickable:active {
+  background: rgba(255,255,255,0.1);
 }
 
 /* ── Journey panel (bottom sheet) ── */

@@ -6,9 +6,10 @@ interface DepartureTableProps {
   departures: Departure[];
   now: number;
   lookaheadMinutes: number;
+  onRowClick?: (dep: Departure) => void;
 }
 
-export default function DepartureTable({ departures, now, lookaheadMinutes }: DepartureTableProps) {
+export default function DepartureTable({ departures, now, lookaheadMinutes, onRowClick }: DepartureTableProps) {
   return (
     <div className="table-wrap">
       <table>
@@ -27,7 +28,7 @@ export default function DepartureTable({ departures, now, lookaheadMinutes }: De
               <td colSpan={5}>Ei busseja seuraavaan {lookaheadMinutes} minuuttiin</td>
             </tr>
           ) : (
-            departures.map((dep, i) => <DepartureRow key={i} dep={dep} now={now} />)
+            departures.map((dep, i) => <DepartureRow key={i} dep={dep} now={now} onClick={onRowClick ? () => onRowClick(dep) : undefined} />)
           )}
         </tbody>
       </table>
@@ -35,7 +36,7 @@ export default function DepartureTable({ departures, now, lookaheadMinutes }: De
   );
 }
 
-function DepartureRow({ dep, now }: { dep: Departure; now: number }) {
+function DepartureRow({ dep, now, onClick }: { dep: Departure; now: number; onClick?: () => void }) {
   const status = getStatus(dep, now);
   const leaveInMs = dep.leaveByMs - now;
 
@@ -58,7 +59,7 @@ function DepartureRow({ dep, now }: { dep: Departure; now: number }) {
     : null;
 
   return (
-    <tr className={`row-status-${status}`}>
+    <tr className={`row-status-${status}${onClick ? ' row-clickable' : ''}`} onClick={onClick}>
       <td><span className="line-badge">{dep.lineRef}</span></td>
       <td>
         <span className="dest-name">{dep.stopName || dep.stopId} → {dep.destinationName}</span>

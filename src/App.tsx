@@ -231,6 +231,7 @@ export default function App() {
           departures={departures}
           now={now}
           lookaheadMinutes={lookaheadMinutes}
+          onRowClick={(dep) => setJourneyDep(dep)}
         />
 
         <div className="sub-header sub-header-footer">
