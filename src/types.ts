@@ -6,7 +6,6 @@ export interface Config {
   stopLabels: Record<string, string>;
   stopWalkingMinutes: Record<string, number>;
   alertBar: boolean;
-  alertBgPulse: boolean;
   alertOverlay: boolean;
   mapStyleUrl: string;
 }

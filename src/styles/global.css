@@ -547,18 +547,6 @@ footer {
 #urgencyBarWrap.bar-orange #urgencyBarFill { background: var(--status-orange); }
 #urgencyBarWrap.bar-red    #urgencyBarFill { background: var(--status-red); }
 
-/* ── Body background pulse (whole screen) ── */
-@keyframes pulse-bg-urgent {
-  0%, 100% { background-color: var(--nysse-dark); }
-  50%       { background-color: #3a1200; }
-}
-@keyframes pulse-bg-late {
-  0%, 100% { background-color: var(--nysse-dark); }
-  50%       { background-color: #3a0000; }
-}
-body.state-urgent { animation: pulse-bg-urgent 0.9s ease-in-out infinite; }
-body.state-late   { animation: pulse-bg-late   0.6s ease-in-out infinite; }
-
 /* ── Full-screen takeover overlay ── */
 .urgency-overlay {
   position: fixed;

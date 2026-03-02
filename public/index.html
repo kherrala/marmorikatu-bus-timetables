@@ -554,18 +554,6 @@
     #urgencyBarWrap.bar-orange #urgencyBarFill { background: var(--status-orange); }
     #urgencyBarWrap.bar-red    #urgencyBarFill { background: var(--status-red); }
 
-    /* ── Body background pulse (whole screen) ── */
-    @keyframes pulse-bg-urgent {
-      0%, 100% { background-color: var(--nysse-dark); }
-      50%       { background-color: #3a1200; }
-    }
-    @keyframes pulse-bg-late {
-      0%, 100% { background-color: var(--nysse-dark); }
-      50%       { background-color: #3a0000; }
-    }
-    body.state-urgent { animation: pulse-bg-urgent 0.9s ease-in-out infinite; }
-    body.state-late   { animation: pulse-bg-late   0.6s ease-in-out infinite; }
-
     /* ── Full-screen takeover overlay ── */
     #urgencyOverlay {
       position: fixed;
@@ -888,17 +876,6 @@
     </div>
     <div class="settings-row">
       <div>
-        <div class="settings-row-label">Taustan välähdys</div>
-        <div class="settings-row-desc">Koko näyttö välähtää oranssina kun on kiire lähteä</div>
-      </div>
-      <label class="toggle">
-        <input type="checkbox" id="toggleBgPulse" onchange="saveSetting('alert_bg_pulse', this.checked)">
-        <div class="toggle-track"></div>
-        <div class="toggle-thumb"></div>
-      </label>
-    </div>
-    <div class="settings-row">
-      <div>
         <div class="settings-row-label">Koko näytön varoitus</div>
         <div class="settings-row-desc">Koko näytölle ilmestyvä lähtöilmoitus</div>
       </div>
@@ -934,7 +911,6 @@
 
   // Alert feature flags — defaults come from server config, can be overridden by localStorage
   let alertBar = true;
-  let alertBgPulse = true;
   let alertOverlay = true;
 
   // Overlay snooze state
@@ -959,7 +935,6 @@
       return v !== null ? v === 'true' : fallback;
     };
     alertBar     = get('alert_bar',      serverDefaults.alertBar     !== false);
-    alertBgPulse = get('alert_bg_pulse', serverDefaults.alertBgPulse !== false);
     alertOverlay = get('alert_overlay',  serverDefaults.alertOverlay  !== false);
     syncToggles();
     if (!alertBar) document.getElementById('urgencyBarWrap').style.display = 'none';
@@ -967,14 +942,12 @@
 
   function syncToggles() {
     document.getElementById('toggleBar').checked     = alertBar;
-    document.getElementById('toggleBgPulse').checked = alertBgPulse;
     document.getElementById('toggleOverlay').checked = alertOverlay;
   }
 
   function saveSetting(key, value) {
     localStorage.setItem(key, value);
     if (key === 'alert_bar')      { alertBar     = value; document.getElementById('urgencyBarWrap').style.display = value ? '' : 'none'; }
-    if (key === 'alert_bg_pulse') { alertBgPulse = value; if (!value) document.body.className = ''; }
     if (key === 'alert_overlay')  { alertOverlay = value; if (!value) document.getElementById('urgencyOverlay').style.display = 'none'; }
   }
 
@@ -1204,9 +1177,7 @@
   const status1     = dep1 ? getStatus(dep1, now) : 'go';
   const leaveInMs1  = dep1 ? dep1.leaveByMs - now : Infinity;
 
-  // Background pulse: only when very close (urgent/late) and not snoozed
-  const isUrgentBg  = status1 === 'urgent' || status1 === 'late';
-  document.body.className = (alertBgPulse && isUrgentBg && !isSnoozed) ? 'state-' + status1 : '';
+  document.body.className = '';
 
   // Overlay: shows when leaving home is within 2 minutes and not snoozed
   const overlay     = document.getElementById('urgencyOverlay');

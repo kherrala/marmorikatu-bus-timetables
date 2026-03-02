@@ -29,7 +29,6 @@ const LOOKAHEAD_MINUTES = parseInt(process.env.LOOKAHEAD_MINUTES || '90', 10);
 
 // Alert feature default flags (can be overridden per-device in browser localStorage)
 const ALERT_BAR      = process.env.ALERT_BAR      !== 'false';
-const ALERT_BG_PULSE = process.env.ALERT_BG_PULSE !== 'false';
 const ALERT_OVERLAY  = process.env.ALERT_OVERLAY  !== 'false';
 
 // Map style (MapLibre GL vector tiles)
@@ -604,7 +603,6 @@ app.get('/api/config', (req, res) => {
     stopLabels,
     stopWalkingMinutes,
     alertBar: ALERT_BAR,
-    alertBgPulse: ALERT_BG_PULSE,
     alertOverlay: ALERT_OVERLAY,
     mapStyleUrl,
   });

@@ -20,7 +20,6 @@ export default function App() {
   const [apiOk, setApiOk] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
   const [alertBar, setAlertBar] = useState(true);
-  const [alertBgPulse, setAlertBgPulse] = useState(true);
   const [alertOverlay, setAlertOverlay] = useState(true);
   const [dismissedDepKey, setDismissedDepKey] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -48,7 +47,6 @@ export default function App() {
           return v !== null ? v === 'true' : def;
         };
         setAlertBar(getPref('alert_bar', data.alertBar));
-        setAlertBgPulse(getPref('alert_bg_pulse', data.alertBgPulse));
         setAlertOverlay(getPref('alert_overlay', data.alertOverlay));
       })
       .catch(err => console.warn('Config load failed:', err));
@@ -145,14 +143,10 @@ export default function App() {
   // Body class: background pulse + overlay-visible flag
   const status1 = dep1 ? getStatus(dep1, now) : 'go';
   const isSnoozed = dep1 !== null && dismissedDepKey === getDepKey(dep1);
-  const isUrgentBg = status1 === 'urgent' || status1 === 'late';
   const overlayVisible = alertOverlay && dep1 !== null && (dep1.leaveByMs - now) < 2 * 60 * 1000 && dep1.leaveByMs > now && !isSnoozed;
 
   useEffect(() => {
-    const classes: string[] = [];
-    if (alertBgPulse && isUrgentBg && !isSnoozed) classes.push(`state-${status1}`);
-    if (overlayVisible) classes.push('overlay-visible');
-    document.body.className = classes.join(' ');
+    document.body.className = overlayVisible ? 'overlay-visible' : '';
   });
 
   const mapStyleUrl = config?.mapStyleUrl ?? CARTO_STYLE;
@@ -169,10 +163,6 @@ export default function App() {
   const handleAlertBarChange = (v: boolean) => {
     localStorage.setItem('alert_bar', String(v));
     setAlertBar(v);
-  };
-  const handleAlertBgPulseChange = (v: boolean) => {
-    localStorage.setItem('alert_bg_pulse', String(v));
-    setAlertBgPulse(v);
   };
   const handleAlertOverlayChange = (v: boolean) => {
     localStorage.setItem('alert_overlay', String(v));
@@ -238,10 +228,8 @@ export default function App() {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         alertBar={alertBar}
-        alertBgPulse={alertBgPulse}
         alertOverlay={alertOverlay}
         onAlertBarChange={handleAlertBarChange}
-        onAlertBgPulseChange={handleAlertBgPulseChange}
         onAlertOverlayChange={handleAlertOverlayChange}
       />
 

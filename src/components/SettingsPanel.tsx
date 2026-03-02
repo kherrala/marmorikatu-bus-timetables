@@ -4,10 +4,8 @@ interface SettingsPanelProps {
   open: boolean;
   onClose: () => void;
   alertBar: boolean;
-  alertBgPulse: boolean;
   alertOverlay: boolean;
   onAlertBarChange: (v: boolean) => void;
-  onAlertBgPulseChange: (v: boolean) => void;
   onAlertOverlayChange: (v: boolean) => void;
 }
 
@@ -23,8 +21,8 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 
 export default function SettingsPanel({
   open, onClose,
-  alertBar, alertBgPulse, alertOverlay,
-  onAlertBarChange, onAlertBgPulseChange, onAlertOverlayChange,
+  alertBar, alertOverlay,
+  onAlertBarChange, onAlertOverlayChange,
 }: SettingsPanelProps) {
   if (!open) return null;
 
@@ -45,13 +43,6 @@ export default function SettingsPanel({
             <div className="settings-row-desc">Vähenevä palkki osoittaa jäljellä olevan ajan</div>
           </div>
           <Toggle checked={alertBar} onChange={onAlertBarChange} />
-        </div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-row-label">Taustan välähdys</div>
-            <div className="settings-row-desc">Koko näyttö välähtää oranssina kun on kiire lähteä</div>
-          </div>
-          <Toggle checked={alertBgPulse} onChange={onAlertBgPulseChange} />
         </div>
         <div className="settings-row">
           <div>
