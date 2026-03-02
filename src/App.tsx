@@ -136,8 +136,9 @@ export default function App() {
   const bus2 = findBus(dep2);
 
   // City-centre arrival times for dep1 & dep2 — 15 s refresh
-  const ARRIVAL_STOP_IDS = ['0519', '0569'];
+  const arrivalStopIds = config?.arrivalStopIds ?? [];
   useEffect(() => {
+    if (arrivalStopIds.length === 0) return;
     const fetchArrivals = async (dep: Departure | null, setter: (v: OnwardStop[]) => void) => {
       if (!dep) { setter([]); return; }
       try {
@@ -145,7 +146,7 @@ export default function App() {
         const res = await fetch(`/api/onward-calls?${params}`);
         const data = await res.json();
         if (data.found) {
-          setter((data.stops || []).filter((s: OnwardStop) => ARRIVAL_STOP_IDS.includes(s.id)));
+          setter((data.stops || []).filter((s: OnwardStop) => arrivalStopIds.includes(s.id)));
         } else {
           setter([]);
         }
@@ -158,7 +159,7 @@ export default function App() {
       fetchArrivals(dep2, setArrivals2);
     }, 15_000);
     return () => clearInterval(id);
-  }, [dep1?.lineRef, dep1?.departureTimeMs, dep2?.lineRef, dep2?.departureTimeMs]);
+  }, [dep1?.lineRef, dep1?.departureTimeMs, dep2?.lineRef, dep2?.departureTimeMs, arrivalStopIds.join()]);
 
   // Auto-clear snooze when the featured departure changes to a different one
   useEffect(() => {
@@ -263,7 +264,7 @@ export default function App() {
       />
 
       {journeyDep && (
-        <JourneyPanel dep={journeyDep} onClose={() => setJourneyDep(null)} />
+        <JourneyPanel dep={journeyDep} terminalStopIds={config?.terminalStopIds ?? []} onClose={() => setJourneyDep(null)} />
       )}
 
       {(overlayVisible || previewDep) && (

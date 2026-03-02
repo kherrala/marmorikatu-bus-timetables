@@ -4,12 +4,11 @@ import { formatTime } from '../utils';
 
 interface JourneyPanelProps {
   dep: Departure;
+  terminalStopIds: string[];
   onClose: () => void;
 }
 
-const TERMINAL_IDS = ['0001', '0002'];
-
-export default function JourneyPanel({ dep, onClose }: JourneyPanelProps) {
+export default function JourneyPanel({ dep, terminalStopIds, onClose }: JourneyPanelProps) {
   const [stops, setStops] = useState<OnwardStop[]>([]);
   const [loading, setLoading] = useState(true);
   const [found, setFound] = useState(false);
@@ -68,7 +67,7 @@ export default function JourneyPanel({ dep, onClose }: JourneyPanelProps) {
               ? stop.expectedTimeMs - stop.aimedTimeMs
               : 0;
             const delayMin = Math.round(delayMs / 60000);
-            const isTerminal = TERMINAL_IDS.includes(stop.id);
+            const isTerminal = terminalStopIds.includes(stop.id);
 
             return (
               <div key={stop.id} className={`journey-stop${isTerminal ? ' journey-stop-terminal' : ''}`}>

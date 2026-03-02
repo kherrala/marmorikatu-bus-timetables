@@ -16,6 +16,7 @@ export default function DepartureTable({ departures, now, lookaheadMinutes }: De
           <tr>
             <th>Linja</th>
             <th>Määränpää</th>
+            <th className="right">Lähtö</th>
             <th className="right">Perillä</th>
             <th className="right">Lähde kotoa</th>
           </tr>
@@ -23,7 +24,7 @@ export default function DepartureTable({ departures, now, lookaheadMinutes }: De
         <tbody>
           {departures.length === 0 ? (
             <tr className="empty-row">
-              <td colSpan={4}>Ei busseja seuraavaan {lookaheadMinutes} minuuttiin</td>
+              <td colSpan={5}>Ei busseja seuraavaan {lookaheadMinutes} minuuttiin</td>
             </tr>
           ) : (
             departures.map((dep, i) => <DepartureRow key={i} dep={dep} now={now} />)
@@ -63,6 +64,7 @@ function DepartureRow({ dep, now }: { dep: Departure; now: number }) {
         <span className="dest-name">{dep.stopName || dep.stopId} → {dep.destinationName}</span>
         {delayEl}{atStopEl}{schedEl}
       </td>
+      <td className="right time-cell">{formatTime(dep.departureTimeMs)}</td>
       <td className="right time-cell">
         {dep.arrivalTimeMs ? formatTime(dep.arrivalTimeMs) : '—'}
       </td>

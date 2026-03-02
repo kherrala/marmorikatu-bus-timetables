@@ -675,6 +675,8 @@ app.get('/api/config', (req, res) => {
     alertBar: ALERT_BAR,
     alertOverlay: ALERT_OVERLAY,
     mapStyleUrl,
+    arrivalStopIds: ['0519', '0569'],
+    terminalStopIds: ['0001', '0002'],
   });
 });
 

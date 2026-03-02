@@ -8,6 +8,8 @@ export interface Config {
   alertBar: boolean;
   alertOverlay: boolean;
   mapStyleUrl: string;
+  arrivalStopIds: string[];
+  terminalStopIds: string[];
 }
 
 export interface Departure {
