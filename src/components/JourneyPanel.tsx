@@ -43,18 +43,16 @@ export default function JourneyPanel({ dep, onClose }: JourneyPanelProps) {
           <button className="journey-close" onClick={onClose} aria-label="Sulje">✕</button>
         </div>
 
-        <div className="journey-subtitle">Saapumisaika keskustan pysäkeille</div>
+        <div className="journey-subtitle">Saapumisajat pysäkeille</div>
 
         <div className="journey-stops">
           {loading && (
-            <div className="journey-loading">Haetaan reaaliaikatietoja…</div>
+            <div className="journey-loading">Haetaan aikataulutietoja…</div>
           )}
 
           {!loading && !found && (
             <div className="journey-no-data">
-              {dep.source === 'schedule'
-                ? 'Bussilla ei ole vielä reaaliaikatietoja (aikataulupohjainen lähtö).'
-                : 'Reaaliaikatietoja ei saatavilla juuri nyt.'}
+              Aikataulutietoja ei saatavilla juuri nyt.
             </div>
           )}
 
@@ -65,6 +63,7 @@ export default function JourneyPanel({ dep, onClose }: JourneyPanelProps) {
           )}
 
           {!loading && found && stops.map(stop => {
+            const displayTime = stop.expectedTimeMs || stop.aimedTimeMs;
             const delayMs = stop.expectedTimeMs && stop.aimedTimeMs
               ? stop.expectedTimeMs - stop.aimedTimeMs
               : 0;
@@ -75,7 +74,7 @@ export default function JourneyPanel({ dep, onClose }: JourneyPanelProps) {
               <div key={stop.id} className={`journey-stop${isTerminal ? ' journey-stop-terminal' : ''}`}>
                 <div className="journey-stop-name">{stop.name}</div>
                 <div className="journey-stop-time">
-                  <span>{stop.expectedTimeMs ? formatTime(stop.expectedTimeMs) : '—'}</span>
+                  <span>{displayTime ? formatTime(displayTime) : '—'}</span>
                   {delayMin > 1 && (
                     <span className="journey-delay">+{delayMin} min</span>
                   )}

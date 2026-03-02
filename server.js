@@ -322,31 +322,31 @@ async function buildScheduleCache() {
         if (isNaN(departureTimeMs)) continue;
         const lineRef = j.lineUrl ? j.lineUrl.split('/').pop() : '?';
 
-        // Extract city-centre stop arrival times from the full journey
-        const cityStops = [];
-        for (const c of (j.calls || [])) {
+        // Extract all stops AFTER the boarding stop from the full journey
+        const allCalls = j.calls || [];
+        const boardingIdx = allCalls.findIndex(c => c.stopPoint && c.stopPoint.shortName === stopId);
+        const onwardStops = [];
+        for (let ci = boardingIdx + 1; ci < allCalls.length; ci++) {
+          const c = allCalls[ci];
           const cId = c.stopPoint && c.stopPoint.shortName;
-          if (cId && CITY_STOP_IDS.includes(cId)) {
-            const arrMs = extendedTimeToMs(c.arrivalTime || c.departureTime, serviceDate);
-            if (!isNaN(arrMs)) {
-              cityStops.push({
-                id: cId,
-                name: stopNameCache[cId] || cId,
-                aimedTimeMs: arrMs,
-                expectedTimeMs: null,
-              });
-            }
+          if (!cId) continue;
+          const arrMs = extendedTimeToMs(c.arrivalTime || c.departureTime, serviceDate);
+          if (!isNaN(arrMs)) {
+            onwardStops.push({
+              id: cId,
+              name: (c.stopPoint && c.stopPoint.name) || stopNameCache[cId] || cId,
+              aimedTimeMs: arrMs,
+              expectedTimeMs: null,
+            });
           }
         }
-        // Sort in route order
-        cityStops.sort((a, b) => CITY_STOP_IDS.indexOf(a.id) - CITY_STOP_IDS.indexOf(b.id));
 
         entries.push({
           lineRef,
           headSign: j.headSign || '',
           departureTimeMs,
           source: 'schedule',
-          cityStops,
+          onwardStops,
         });
       }
 
@@ -748,8 +748,8 @@ app.get('/api/onward-calls', async (req, res) => {
         for (const e of entries) {
           if (e.lineRef !== lineRef) continue;
           if (Math.abs(e.departureTimeMs - depTimeMs) > MATCH_TOLERANCE_MS) continue;
-          if (e.cityStops && e.cityStops.length > 0) {
-            return res.json({ found: true, stops: e.cityStops, source: 'schedule' });
+          if (e.onwardStops && e.onwardStops.length > 0) {
+            return res.json({ found: true, stops: e.onwardStops, source: 'schedule' });
           }
         }
       }
@@ -758,22 +758,28 @@ app.get('/api/onward-calls', async (req, res) => {
 
     const mvj = matchedVehicle.monitoredVehicleJourney || {};
     const stops = [];
+    const namesToResolve = [];
     for (const call of (mvj.onwardCalls || [])) {
       const stopId = (call.stopPointRef || '').split('/').pop();
-      if (!CITY_STOP_IDS.includes(stopId)) continue;
+      if (!stopId || monitoredStopIds.includes(stopId)) continue; // skip our boarding stop
       const aimedT    = call.aimedArrivalTime    || call.aimedDepartureTime;
       const expectedT = call.expectedArrivalTime || call.expectedDepartureTime || aimedT;
+      if (!stopNameCache[stopId]) namesToResolve.push(stopId);
       stops.push({
         id: stopId,
-        name: stopNameCache[stopId] || stopId,
+        name: stopId, // placeholder, resolved below
         aimedTimeMs:    aimedT    ? new Date(aimedT).getTime()    : null,
         expectedTimeMs: expectedT ? new Date(expectedT).getTime() : null,
       });
     }
 
-    // Return stops in inbound route order
-    stops.sort((a, b) => CITY_STOP_IDS.indexOf(a.id) - CITY_STOP_IDS.indexOf(b.id));
+    // Resolve any unknown stop names
+    if (namesToResolve.length > 0) {
+      await Promise.all(namesToResolve.map(id => resolveStopName(id)));
+    }
+    for (const s of stops) { s.name = stopNameCache[s.id] || s.id; }
 
+    // Stops are already in route order from onwardCalls
     res.json({ found: true, stops });
   } catch (err) {
     console.error('onward-calls error:', err.message);
