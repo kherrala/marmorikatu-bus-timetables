@@ -931,13 +931,14 @@ app.get('/api/departures', async (req, res) => {
 // Provides bus departure tools for AI assistants via Model Context Protocol.
 const { Server: McpServer } = require('@modelcontextprotocol/sdk/server/index.js');
 const { SSEServerTransport } = require('@modelcontextprotocol/sdk/server/sse.js');
+const { ListToolsRequestSchema, CallToolRequestSchema } = require('@modelcontextprotocol/sdk/types.js');
 
 const mcpServer = new McpServer(
   { name: 'bus-timetables', version: '1.0.0' },
   { capabilities: { tools: {} } }
 );
 
-mcpServer.setRequestHandler({ method: 'tools/list' }, async () => ({
+mcpServer.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: 'get_bus_departures',
@@ -961,7 +962,7 @@ mcpServer.setRequestHandler({ method: 'tools/list' }, async () => ({
   ],
 }));
 
-mcpServer.setRequestHandler({ method: 'tools/call' }, async (request) => {
+mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   if (name === 'get_bus_departures') {
