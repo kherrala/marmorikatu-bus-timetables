@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 
 const app = express();
+app.use(express.json());
 
 // --- Config ---
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -924,6 +925,118 @@ app.get('/api/departures', async (req, res) => {
       fetchedAt: cacheTimestamp,
     });
   }
+});
+
+// --- MCP Server (SSE transport) ---
+// Provides bus departure tools for AI assistants via Model Context Protocol.
+const { Server: McpServer } = require('@modelcontextprotocol/sdk/server/index.js');
+const { SSEServerTransport } = require('@modelcontextprotocol/sdk/server/sse.js');
+
+const mcpServer = new McpServer(
+  { name: 'bus-timetables', version: '1.0.0' },
+  { capabilities: { tools: {} } }
+);
+
+mcpServer.setRequestHandler({ method: 'tools/list' }, async () => ({
+  tools: [
+    {
+      name: 'get_bus_departures',
+      description:
+        'Get upcoming bus departures from nearby stops (Kaipanen and Pitkäniitynkatu) ' +
+        'towards Tampere city centre. Returns real-time departure times, line numbers, ' +
+        'destinations, delays, and when you need to leave home to catch each bus. ' +
+        'Walking times to stops are pre-configured.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          limit: {
+            type: 'integer',
+            description: 'Maximum number of departures to return (default 5)',
+            default: 5,
+          },
+        },
+        required: [],
+      },
+    },
+  ],
+}));
+
+mcpServer.setRequestHandler({ method: 'tools/call' }, async (request) => {
+  const { name, arguments: args } = request.params;
+
+  if (name === 'get_bus_departures') {
+    try {
+      const limit = (args && args.limit) || 5;
+      const departures = await fetchDepartures();
+      const now = Date.now();
+
+      const formatted = departures.slice(0, limit).map(d => {
+        const minsUntilDeparture = Math.round((d.departureTimeMs - now) / 60000);
+        const minsUntilLeave = Math.round((d.leaveByMs - now) / 60000);
+        const entry = {
+          line: d.lineRef,
+          destination: d.destinationName,
+          stop: d.stopName,
+          departure_minutes: minsUntilDeparture,
+          leave_home_minutes: minsUntilLeave,
+          source: d.source,
+        };
+        if (d.delaySeconds && d.delaySeconds !== 0) {
+          entry.delay_seconds = d.delaySeconds;
+        }
+        if (d.vehicleAtStop) {
+          entry.vehicle_at_stop = true;
+        }
+        if (d.arrivalTimeMs) {
+          entry.city_arrival_minutes = Math.round((d.arrivalTimeMs - now) / 60000);
+        }
+        return entry;
+      });
+
+      const result = {
+        departures: formatted,
+        stops: monitoredStopIds.map(id => ({
+          id,
+          name: stopLabels[id] || stopNameCache[id] || id,
+          walking_minutes: Math.round(walkMsForStop(id) / 60000),
+        })),
+        fetched_at: new Date().toISOString(),
+      };
+
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      };
+    } catch (err) {
+      return {
+        content: [{ type: 'text', text: `Error fetching departures: ${err.message}` }],
+        isError: true,
+      };
+    }
+  }
+
+  return {
+    content: [{ type: 'text', text: `Unknown tool: ${name}` }],
+    isError: true,
+  };
+});
+
+// SSE transport: one transport per connected client
+const mcpTransports = {};
+
+app.get('/sse', async (req, res) => {
+  const transport = new SSEServerTransport('/messages', res);
+  mcpTransports[transport.sessionId] = transport;
+  res.on('close', () => { delete mcpTransports[transport.sessionId]; });
+  await mcpServer.connect(transport);
+});
+
+app.post('/messages', async (req, res) => {
+  const sessionId = req.query.sessionId;
+  const transport = mcpTransports[sessionId];
+  if (!transport) {
+    return res.status(400).json({ error: 'Unknown session' });
+  }
+  await transport.handlePostMessage(req, res);
 });
 
 // --- Start ---
