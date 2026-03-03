@@ -5,7 +5,6 @@ const path = require('path');
 const fs = require('fs');
 
 const app = express();
-app.use(express.json());
 
 // --- Config ---
 const PORT = parseInt(process.env.PORT || '3000', 10);
