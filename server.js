@@ -970,7 +970,9 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       const departures = await fetchDepartures();
       const now = Date.now();
 
-      const formatted = departures.slice(0, limit).map(d => {
+      // Only include departures the user can still catch (leave time in the future)
+      const catchable = departures.filter(d => d.leaveByMs > now);
+      const formatted = catchable.slice(0, limit).map(d => {
         const minsUntilDeparture = Math.round((d.departureTimeMs - now) / 60000);
         const minsUntilLeave = Math.round((d.leaveByMs - now) / 60000);
         const entry = {
