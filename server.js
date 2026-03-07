@@ -37,7 +37,7 @@ const ALERT_OVERLAY  = process.env.ALERT_OVERLAY  !== 'false';
 // No key → CartoDB dark-matter vector style (free, browser-accessible)
 const MML_API_KEY   = process.env.MML_API_KEY || '';
 const MML_ORIGIN    = 'https://avoin-karttakuva.maanmittauslaitos.fi';
-const CARTO_STYLE   = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+const CARTO_STYLE   = 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
 
 // Rewritten MML style JSON cache (rebuilt when serverBase changes or after 1h)
 let mmlStyleCache     = null;

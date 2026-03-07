@@ -36,7 +36,7 @@ export default function ColumnMap({ bus, mapStyleUrl, overlayVisible, onMapClick
       container: containerRef.current,
       style: mapStyleUrl,
       center: [23.91, 61.46],
-      zoom: 13,
+      zoom: 14,
       attributionControl: false,
     });
     (
@@ -79,11 +79,11 @@ export default function ColumnMap({ bus, mapStyleUrl, overlayVisible, onMapClick
           .addTo(map);
       }
       map.resize();
-      map.easeTo({ center: [bus.lon, bus.lat], zoom: 14, duration: 1200, essential: true });
+      map.easeTo({ center: [bus.lon, bus.lat], zoom: 15, duration: 1200, essential: true });
       // Re-center after container CSS transition completes (expands from maxHeight: 0)
       setTimeout(() => {
         map.resize();
-        map.jumpTo({ center: [bus.lon, bus.lat], zoom: 14 });
+        map.jumpTo({ center: [bus.lon, bus.lat], zoom: 15 });
       }, 600);
     };
 
