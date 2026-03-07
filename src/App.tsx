@@ -9,7 +9,7 @@ import UrgencyOverlay from './components/UrgencyOverlay';
 import SettingsPanel from './components/SettingsPanel';
 import JourneyPanel from './components/JourneyPanel';
 
-const CARTO_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+const CARTO_STYLE = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
 
 export default function App() {
   const [config, setConfig] = useState<Config | null>(null);
